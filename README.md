@@ -1,16 +1,17 @@
-# Function Planner (backend shell)
+# Function Planner (backend shell + planner UI)
 
-This monorepo is the **authentication, course administration, roster, plan lifecycle, and multi-user Yjs collaboration** half of Function Planner.
+This monorepo is the **authentication, course administration, roster, plan lifecycle, and multi-user Yjs collaboration** half of Function Planner, plus the embedded planner diagram UI.
 
-The real planner UI (diagram, function model, config-driven checking, client-side Yjs document shape, etc.) lives separately in [`intro-tools`](../intro-tools) (`function-planner.js` / `src/`). That UI is **not integrated here yet**. This app uses a **dummy textarea** bound to Yjs so staff and students can exercise live collaboration end-to-end before the planner is wired in.
+The planner UI (diagram, function model, config-driven checking) lives in the [`function-planner-ui`](https://github.com/MoravianUniversity/function-planner-ui) submodule at [`packages/function-planner-ui`](packages/function-planner-ui). Student plans use that UI against ticketed Yjs rooms. Base-plan content editing is still a collaborative **JSON textarea** (seed template for empty student docs) until a later phase.
 
 ## Monorepo layout
 
 | Path | Role |
 |------|------|
 | `apps/server` | Express API, Google OAuth sessions, Prisma/Postgres, Yjs WebSocket (`/yjs`) with Postgres persistence |
-| `apps/client` | Thin React shell: courses, roster, base-plan manage/publish, student start/join/leave, live textareas |
+| `apps/client` | React shell: courses, roster, base-plan manage/publish, student start/join/leave, planner host |
 | `packages/shared` | Shared TypeScript types and Zod schemas |
+| `packages/function-planner-ui` | Git submodule: GoJS planner (`init` + Yjs model) |
 
 ## What works today
 
@@ -18,16 +19,16 @@ The real planner UI (diagram, function model, config-driven checking, client-sid
 - Courses with instructor / TA / student enrollments; course becomes **readonly** after `endsAt`
 - Roster: add members, CSV student import, enable/disable enrollments
 - Base plans: create, import from another course you instruct, title/settings, publish (cannot unpublish)
-- Base-plan **settings** JSON (allowed types, mins, claim/call-graph flags, doc style) — stored for the future planner UI
-- **Yjs persistence** to Postgres (`yjsState` + denormalized `content`) for base and student plans
-- Staff **live collaborative textarea** on base plans (ticketed WebSocket)
-- Students: start/join/leave student plans with live shared textarea; staff can supervise without becoming members (TAs read-only)
+- Base-plan **settings** JSON mapped into the planner `init` options (allowed types, mins, claim/call-graph, doc style, etc.)
+- **Yjs persistence** to Postgres (`yjsState`; `content` remains for base-plan JSON textarea / optional seed)
+- Students: start/join/leave with the live **Function Planner** UI; staff can supervise without becoming members (TAs read-only)
+- Staff **JSON textarea** on base plans (ticketed WebSocket) for collaborative seed/template text
 
 ## Student start / join / leave
 
 Students open `/plans/:basePlanId` (published assignment):
 
-1. If already a **member** of a student plan for that base → open the mock planner (Yjs textarea).
+1. If already a **member** of a student plan for that base → open the planner.
 2. Otherwise show **Start / Join**:
    - **Start New Plan** — creates a student plan with only themselves.
    - **Joinable plans** — other groups for the same course + base plan that currently have **at least one student member connected** to the Yjs room. Member names are listed; **active** (connected) names are emphasized.
@@ -38,26 +39,33 @@ A student may belong to **at most one** student plan per `(courseId, basePlanId)
 
 Staff open a student plan instance from the base-plan manage page (or by student-plan id). They receive a collab ticket **without** a membership row; instructors can edit, TAs are read-only.
 
+Empty student docs seed from parseable base-plan JSON `content` when present; otherwise a single `main` function.
+
 ## Intentionally incomplete
 
-- Planner UI from `intro-tools` not embedded or synced yet (textarea is a stand-in for the Yjs document)
+- Base-plan editor still uses the JSON textarea (not the diagram UI yet)
 - No email notifications for join requests
+- Author/claim identity not wired to Google accounts yet
 
 ## Collaboration stack note
 
 Browser clients use `y-websocket` + **Yjs 13** (`y-protocols`). The server must use the matching **`y-websocket@1.5.x` `bin/utils`** server helpers (also Yjs 13). Do not use `@y/websocket-server` (Yjs 14 / `@y/protocols`) — connections will succeed but documents will not sync.
+
+Student planner docs use Yjs maps (`modelData`, `functions`, `calls`), not `Y.Text('content')`. IndexedDB is disabled when connected to the server.
 
 ## Prerequisites
 
 - Node.js (npm workspaces)
 - PostgreSQL listening locally (default URL assumes DB name `function_planner`)
 - Google OAuth client with redirect URI matching `GOOGLE_CALLBACK_URL`
+- Clone with submodules: `git clone --recurse-submodules …` (or `git submodule update --init --recursive`)
 
 ## Quick start
 
-1. Install deps from the repo root:
+1. Install deps from the repo root (after submodules are checked out):
 
    ```bash
+   git submodule update --init --recursive
    npm install
    npm run build -w packages/shared
    ```
@@ -71,6 +79,13 @@ Browser clients use `y-websocket` + **Yjs 13** (`y-protocols`). The server must 
    | `CLIENT_URL` | Browser origin of the Vite client (**`http://localhost:5174`**) — used for CORS and post-login redirect |
    | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth credentials |
    | `GOOGLE_CALLBACK_URL` | Default `http://localhost:3000/auth/google/callback` |
+
+   Optionally copy `apps/client/.env.example` → `apps/client/.env`:
+
+   | Variable | Notes |
+   |----------|--------|
+   | `VITE_API_BASE_URL` | Optional API origin override (default talks to `:3000`) |
+   | `VITE_GOJS_LICENSE_KEY` | GoJS license key for your deployment domain |
 
    Optionally edit [`apps/server/config.json`](apps/server/config.json) (see `config.example.json`):
 
@@ -111,6 +126,18 @@ Health check: `GET http://localhost:3000/healthz` → `{"ok":true}`.
 - Override: set `VITE_API_BASE_URL` when starting the client (e.g. empty/`""` if you prefer same-origin requests through the Vite proxy).
 - Yjs always connects to the **page host** (`/yjs`), so the Vite WS proxy matters when using the client on `:5174`.
 
+## Updating the planner UI submodule
+
+UI changes belong in [MoravianUniversity/function-planner-ui](https://github.com/MoravianUniversity/function-planner-ui). In this repo:
+
+```bash
+cd packages/function-planner-ui
+# edit, commit, push to function-planner-ui
+cd ../..
+git add packages/function-planner-ui
+git commit -m "Bump function-planner-ui submodule"
+```
+
 ## Useful scripts
 
 | Script | Where | Purpose |
@@ -123,10 +150,10 @@ Health check: `GET http://localhost:3000/healthz` → `{"ok":true}`.
 
 ## Roles (short)
 
-- **INSTRUCTOR** — create/edit courses and plans, roster, publish, edit base-plan and student-plan content (Yjs); supervise student plans without joining
+- **INSTRUCTOR** — create/edit courses and plans, roster, publish, edit base-plan JSON and student-plan diagrams (Yjs); supervise student plans without joining
 - **TA** — view published base plans and student instances; live view of collab (read-only content)
 - **STUDENT** — start / join / leave plans for published base plans; live edit with teammates
 
 ## Related project
 
-Planner editor / Yjs document model: `../intro-tools` (`function-planner.html` / `function-planner.js` / `src/`). Next integration step is to replace this app’s dummy textarea with that UI against the same collab ticket + WebSocket path.
+Planner editor package / demos: [`function-planner-ui`](https://github.com/MoravianUniversity/function-planner-ui) (submodule).

@@ -425,3 +425,254 @@ textarea {
   font-size: 0.875rem;
   color: #555;
 }
+
+.app-planner-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.app-planner-status {
+  margin: 0;
+}
+
+/*
+ * GoJS needs a definite clientHeight. The planner CSS uses .diagram { height: 100% },
+ * which collapses to 0 when the host only has min-height (inspectors still show because
+ * they are absolutely positioned with top/bottom). Match the standalone demo fill layout.
+ */
+.app-planner-host {
+  position: relative;
+  height: min(70vh, 52rem);
+  min-height: 28rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+/* init() adds .func-planner onto this same host element */
+.app-planner-host.func-planner .diagram {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+}
+
+.app-manage-plan--planner {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Full-window student planner (hides app chrome) */
+body.app-planner-immersive {
+  margin: 0;
+  overflow: hidden;
+}
+
+body.app-planner-immersive #app-header {
+  display: none;
+}
+
+body.app-planner-immersive > #root > div {
+  min-height: 100vh;
+}
+
+.app-planner-immersive-root {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #f3f4f6;
+}
+
+.app-planner-immersive-root .app-planner-host {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.app-planner-top-overlay {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  max-width: min(36rem, calc(100% - 2rem));
+  pointer-events: none;
+}
+
+.app-planner-top-overlay > * {
+  pointer-events: auto;
+}
+
+.app-planner-join-banner {
+  background: #fff;
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  padding: 0.75rem 1rem;
+  color: #111;
+}
+
+.app-planner-join-banner p {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.app-planner-join-approve.app-btn-primary {
+  background: #007bff;
+  border-color: #0069d9;
+  color: #fff !important;
+}
+
+.app-planner-join-approve.app-btn-primary:hover {
+  background: #0056b3;
+  border-color: #004a99;
+}
+
+.app-planner-bottom-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 0.65rem;
+  transform: translateX(-50%);
+  /* Above planner instructions panel (z-index 1000) so tips stay visible */
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.88);
+  border: 1px solid #d4d4d8;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.12);
+  backdrop-filter: blur(6px);
+  max-width: calc(100% - 7rem);
+  overflow: visible;
+}
+
+.func-planner.dark-mode ~ .app-planner-bottom-bar,
+.app-planner-immersive-root:has(.func-planner.dark-mode) .app-planner-bottom-bar {
+  background: rgb(31 41 55 / 0.9);
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+.app-planner-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #a1a1aa;
+  flex-shrink: 0;
+}
+
+/* Immediate tips above status / members / view-mode (no native title delay) */
+.app-planner-bottom-bar [data-tip] {
+  position: relative;
+}
+.app-planner-bottom-bar [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.35rem;
+  border: 1px solid #d4d4d8;
+  background: #fff;
+  color: #18181b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.app-planner-bottom-bar [data-tip]:hover::after,
+.app-planner-bottom-bar [data-tip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+.func-planner.dark-mode ~ .app-planner-bottom-bar [data-tip]::after,
+.app-planner-immersive-root:has(.func-planner.dark-mode) .app-planner-bottom-bar [data-tip]::after {
+  background: #1f2937;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+.app-planner-status-dot--live {
+  background: #16a34a;
+  box-shadow: 0 0 0 3px rgb(22 163 74 / 0.25);
+}
+
+.app-planner-status-dot--connecting {
+  background: #ca8a04;
+  animation: app-planner-pulse 1.2s ease-in-out infinite;
+}
+
+.app-planner-status-dot--error {
+  background: #dc2626;
+}
+
+@keyframes app-planner-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.app-planner-view-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: #52525b;
+  line-height: 1;
+}
+
+.app-planner-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  /* visible so above-tips are not clipped (overflow-x:auto forces overflow-y clip) */
+  overflow: visible;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.app-planner-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: #e4e4e7;
+  color: #3f3f46;
+  border: 2px solid transparent;
+  opacity: 0.55;
+}
+
+.app-planner-avatar--active {
+  opacity: 1;
+  border-color: #16a34a;
+}
+
+.app-planner-fallback {
+  padding: 1rem;
+}

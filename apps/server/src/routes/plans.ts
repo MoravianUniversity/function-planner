@@ -728,6 +728,8 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
       isMember,
       canEdit,
       readonly: !canEdit,
+      settings: plan.basePlan.settings ?? null,
+      basePlanContent: plan.basePlan.content ?? '',
       activeUserIds,
       members: plan.members.map((m) => ({
         userId: m.userId,

@@ -5,7 +5,8 @@
   "workspaces": [
     "apps/server",
     "apps/client",
-    "packages/shared"
+    "packages/shared",
+    "packages/function-planner-ui"
   ],
   "scripts": {
     "build": "npm run build -w packages/shared && npm run build -w apps/server && npm run build -w apps/client",

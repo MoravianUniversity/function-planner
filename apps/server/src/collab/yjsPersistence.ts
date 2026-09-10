@@ -88,7 +88,10 @@ async function persistDoc(docName: string, doc: YjsDoc): Promise<void> {
   }
 
   const state = Buffer.from(Y.encodeStateAsUpdate(doc));
-  const content = doc.getText('content').toString();
+  // Planner docs use Y.Maps (modelData/functions/calls), not Y.Text('content').
+  // Keep content as empty for map-based docs; base-plan JSON textarea still uses Y.Text('content').
+  const ytext = doc.getText('content');
+  const content = ytext.length > 0 ? ytext.toString() : '';
 
   if (parsed.kind === 'base') {
     await prisma.basePlan.updateMany({

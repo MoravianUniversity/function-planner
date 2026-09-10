@@ -23,6 +23,7 @@ export interface PlannerExtraFab {
 export interface UseFunctionPlannerOptions {
   roomSegment: string | undefined;
   ticket: string | undefined;
+  /** Stable module id for downloads/exports (base plan id, e.g. `test-plan`). */
   planId: string;
   title?: string;
   settings: PlanConfig;

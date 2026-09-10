@@ -280,7 +280,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
       <FunctionPlannerHost
         roomSegment={roomOk ? ticketPayload?.roomSegment : undefined}
         ticket={roomOk ? ticketPayload?.ticket : undefined}
-        planId={planId}
+        planId={plan.basePlanId}
         title={plan.title}
         settings={settings}
         initialModel={initialModel}
@@ -310,7 +310,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
           </button>
           <button
             type="button"
-            className="app-btn app-btn-primary"
+            className="app-btn app-btn-danger"
             disabled={leaveMutation.isPending}
             onClick={() => leaveMutation.mutate()}
           >

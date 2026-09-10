@@ -2,7 +2,7 @@
 
 This monorepo is the **authentication, course administration, roster, plan lifecycle, and multi-user Yjs collaboration** half of Function Planner, plus the embedded planner diagram UI.
 
-The planner UI (diagram, function model, config-driven checking) lives in the [`function-planner-ui`](https://github.com/MoravianUniversity/function-planner-ui) submodule at [`packages/function-planner-ui`](packages/function-planner-ui). Student plans use that UI against ticketed Yjs rooms. Base-plan content editing is still a collaborative **JSON textarea** (seed template for empty student docs) until a later phase.
+The planner UI (diagram, function model, config-driven checking) lives in the [`function-planner-ui`](https://github.com/MoravianUniversity/function-planner-ui) submodule at [`packages/function-planner-ui`](packages/function-planner-ui). Student plans and the staff base-plan editor both use that UI against ticketed Yjs rooms.
 
 ## Monorepo layout
 
@@ -20,9 +20,9 @@ The planner UI (diagram, function model, config-driven checking) lives in the [`
 - Roster: add members, CSV student import, enable/disable enrollments
 - Base plans: create, import from another course you instruct, title/settings, publish (cannot unpublish)
 - Base-plan **settings** JSON mapped into the planner `init` options (allowed types, mins, claim/call-graph, doc style, etc.)
-- **Yjs persistence** to Postgres (`yjsState`; `content` remains for base-plan JSON textarea / optional seed)
+- **Yjs persistence** to Postgres (`yjsState`; map-based docs also refresh `content` JSON for seeding)
 - Students: start/join/leave with the live **Function Planner** UI; staff can supervise without becoming members (TAs read-only)
-- Staff **JSON textarea** on base plans (ticketed WebSocket) for collaborative seed/template text
+- Staff **Function Planner** on base plans (ticketed WebSocket; instructors edit, TAs read-only) — seed template for empty student docs
 
 ## Student start / join / leave
 
@@ -43,15 +43,14 @@ Empty student docs seed from parseable base-plan JSON `content` when present; ot
 
 ## Intentionally incomplete
 
-- Base-plan editor still uses the JSON textarea (not the diagram UI yet)
 - No email notifications for join requests
-- Author/claim identity not wired to Google accounts yet
+- Claimable function owners use member display names (not stable user ids yet)
 
 ## Collaboration stack note
 
 Browser clients use `y-websocket` + **Yjs 13** (`y-protocols`). The server must use the matching **`y-websocket@1.5.x` `bin/utils`** server helpers (also Yjs 13). Do not use `@y/websocket-server` (Yjs 14 / `@y/protocols`) — connections will succeed but documents will not sync.
 
-Student planner docs use Yjs maps (`modelData`, `functions`, `calls`), not `Y.Text('content')`. IndexedDB is disabled when connected to the server.
+Planner docs (student and base) use Yjs maps (`modelData`, `functions`, `calls`), not `Y.Text('content')`. IndexedDB is disabled when connected to the server. Persisted `content` is a JSON export of those maps (used to seed empty student docs).
 
 ## Prerequisites
 

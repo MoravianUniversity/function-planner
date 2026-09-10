@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useMemo } from 'react';
 import { useFunctionPlanner, type PlannerExtraFab, type UseFunctionPlannerOptions } from './useFunctionPlanner';
 import type { YjsCollabStatus } from './useYjsTextarea';
 
@@ -12,14 +13,23 @@ export interface PlannerMember {
   active: boolean;
 }
 
-type FunctionPlannerHostProps = UseFunctionPlannerOptions & {
+type FunctionPlannerHostProps = Omit<UseFunctionPlannerOptions, 'externalAuthors'> & {
   members?: PlannerMember[];
+  /**
+   * When true (default if `members` is provided), lock authors to member display
+   * names for claiming/export. Base-plan editor omits members so authors stay template-style.
+   */
+  authorsFromMembers?: boolean;
   currentUserId?: string;
   /** Join-request / other top overlays. */
   topOverlay?: ReactNode;
   /** Tiny staff / read-only indicator near members. */
   viewModeBadge?: ReactNode;
 };
+
+export function memberAuthorLabel(m: Pick<PlannerMember, 'firstName' | 'lastName' | 'email'>): string {
+  return `${m.firstName} ${m.lastName}`.trim() || m.email;
+}
 
 function memberInitials(m: PlannerMember): string {
   const a = (m.firstName || '').trim().charAt(0);
@@ -77,14 +87,29 @@ function statusTitle(status: YjsCollabStatus): string {
 
 /** Full-bleed planner host with member strip and overlays. */
 export function FunctionPlannerHost({
-  members = [],
+  members,
+  authorsFromMembers = members !== undefined,
   currentUserId,
   topOverlay,
   viewModeBadge,
   ...plannerProps
 }: FunctionPlannerHostProps) {
-  const { hostRef, status } = useFunctionPlanner(plannerProps);
-  const ordered = sortMembers(members, currentUserId);
+  const memberList = members ?? [];
+  const externalAuthors = useMemo(() => {
+    if (!authorsFromMembers || members == null) {
+      return null;
+    }
+    // Stable order by userId so Yjs author sync is deterministic across clients.
+    return [...members]
+      .sort((a, b) => a.userId.localeCompare(b.userId))
+      .map(memberAuthorLabel);
+  }, [authorsFromMembers, members]);
+
+  const { hostRef, status } = useFunctionPlanner({
+    ...plannerProps,
+    externalAuthors
+  });
+  const ordered = sortMembers(memberList, currentUserId);
 
   return (
     <div className="app-planner-immersive-root">
@@ -102,7 +127,7 @@ export function FunctionPlannerHost({
         <ul className="app-planner-members">
           {ordered.map((m) => {
             const isMe = m.userId === currentUserId;
-            const name = `${m.firstName} ${m.lastName}`.trim() || m.email;
+            const name = memberAuthorLabel(m);
             const tip = `${name}${isMe ? ' (you)' : ''}${m.active ? ' · in planner' : ' · offline'}`;
             return (
               <li key={m.userId}>

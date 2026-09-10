@@ -20,8 +20,16 @@ const Y = require('yjs') as {
   encodeStateAsUpdate: (doc: YjsDoc) => Uint8Array;
 };
 
+type YMapLike = {
+  size: number;
+  toJSON: () => Record<string, unknown>;
+  entries: () => IterableIterator<[string, { toJSON: () => Record<string, unknown> }]>;
+  keys: () => IterableIterator<string>;
+};
+
 type YjsDoc = {
   getText: (name: string) => { toString: () => string; length: number; insert: (i: number, s: string) => void };
+  getMap: (name: string) => YMapLike;
   transact: (fn: () => void) => void;
   on: (event: 'update', handler: (...args: unknown[]) => void) => void;
 };
@@ -30,6 +38,40 @@ const { setPersistence, docs } = yWebsocketUtils;
 
 const DEBOUNCE_MS = 2000;
 const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
+
+function plannerMapsNonEmpty(doc: YjsDoc): boolean {
+  return doc.getMap('functions').size > 0 || doc.getMap('calls').size > 0;
+}
+
+/** Serialize planner Y.Maps to the JSON shape used for base-plan seed `content`. */
+function exportPlannerContent(doc: YjsDoc): string {
+  const modelData = doc.getMap('modelData').toJSON();
+  const out: Record<string, unknown> = { ...modelData };
+  delete out.functions;
+  delete out.calls;
+  out.functions = Array.from(doc.getMap('functions').entries()).map(([key, ymap]) => {
+    const func = ymap.toJSON();
+    func.key = key;
+    return func;
+  });
+  out.calls = Array.from(doc.getMap('calls').keys()).map((callKey) => {
+    const [from, to] = callKey.split('-');
+    return { from, to };
+  });
+  return JSON.stringify(out);
+}
+
+/**
+ * Prefer map-based planner JSON when present so base-plan `content` stays a
+ * usable seed for new student docs. Fall back to legacy Y.Text('content').
+ */
+function contentForPersist(doc: YjsDoc): string {
+  if (plannerMapsNonEmpty(doc)) {
+    return exportPlannerContent(doc);
+  }
+  const ytext = doc.getText('content');
+  return ytext.length > 0 ? ytext.toString() : '';
+}
 
 async function loadAndBind(docName: string, doc: YjsDoc): Promise<void> {
   const parsed = parseYjsDocName(docName);
@@ -40,45 +82,29 @@ async function loadAndBind(docName: string, doc: YjsDoc): Promise<void> {
   if (parsed.kind === 'base') {
     const plan = await prisma.basePlan.findFirst({
       where: { courseId: parsed.courseId, id: parsed.basePlanId },
-      select: { yjsState: true, content: true }
+      select: { yjsState: true }
     });
     if (!plan) {
       return;
     }
     if (plan.yjsState && plan.yjsState.length > 0) {
       Y.applyUpdate(doc, new Uint8Array(plan.yjsState));
-      return;
     }
-    if (plan.content) {
-      const ytext = doc.getText('content');
-      if (ytext.length === 0) {
-        doc.transact(() => {
-          ytext.insert(0, plan.content);
-        });
-      }
-    }
+    // Empty docs are seeded on the client from basePlan.content via markSynced.
     return;
   }
 
   const plan = await prisma.studentPlan.findFirst({
     where: { id: parsed.studentPlanId, courseId: parsed.courseId },
-    select: { yjsState: true, content: true }
+    select: { yjsState: true }
   });
   if (!plan) {
     return;
   }
   if (plan.yjsState && plan.yjsState.length > 0) {
     Y.applyUpdate(doc, new Uint8Array(plan.yjsState));
-    return;
   }
-  if (plan.content) {
-    const ytext = doc.getText('content');
-    if (ytext.length === 0) {
-      doc.transact(() => {
-        ytext.insert(0, plan.content);
-      });
-    }
-  }
+  // Empty student docs seed from basePlanContent / BASIC_MODEL on the client.
 }
 
 async function persistDoc(docName: string, doc: YjsDoc): Promise<void> {
@@ -88,10 +114,7 @@ async function persistDoc(docName: string, doc: YjsDoc): Promise<void> {
   }
 
   const state = Buffer.from(Y.encodeStateAsUpdate(doc));
-  // Planner docs use Y.Maps (modelData/functions/calls), not Y.Text('content').
-  // Keep content as empty for map-based docs; base-plan JSON textarea still uses Y.Text('content').
-  const ytext = doc.getText('content');
-  const content = ytext.length > 0 ? ytext.toString() : '';
+  const content = contentForPersist(doc);
 
   if (parsed.kind === 'base') {
     await prisma.basePlan.updateMany({

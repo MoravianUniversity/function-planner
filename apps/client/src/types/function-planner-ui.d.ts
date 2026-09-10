@@ -13,6 +13,7 @@ declare module 'function-planner-ui' {
     id: string;
     model: Doc | null;
     markSynced(meta?: { source?: string }): void;
+    syncExternalAuthors(names: string[]): void;
     destroy(): void;
     exportModel(): object;
     importModel(data: object): void;
@@ -46,6 +47,9 @@ declare module 'function-planner-ui' {
     adminMode?: boolean;
     callGraphOnly?: boolean;
     showSaveJSON?: boolean;
+    showLoadJSON?: boolean;
+    /** When non-null, authors are locked to this list (plan members). */
+    externalAuthors?: string[] | null;
     ydoc?: Doc;
     useIndexedDB?: boolean;
     readonly?: boolean;
@@ -58,6 +62,7 @@ declare module 'function-planner-ui' {
   export interface InitHandle {
     model: Model;
     diagram: unknown;
+    setExternalAuthors(names: string[] | null): void;
     destroy(): void;
   }
 

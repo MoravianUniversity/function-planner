@@ -31,6 +31,13 @@ export interface UseFunctionPlannerOptions {
   initialModel?: object | null;
   readonly?: boolean;
   adminMode?: boolean;
+  /** Show Load from JSON (replaces whole model); for base-plan authoring. */
+  showLoadJSON?: boolean;
+  /**
+   * When set (including `[]`), authors are locked to this list (plan members).
+   * Omit / pass `null` for free-text authors (local demos / base-plan templates).
+   */
+  externalAuthors?: string[] | null;
   enabled?: boolean;
   /** Groups of FABs stacked above theme/settings/help. */
   extraFabs?: PlannerExtraFab[][];
@@ -42,6 +49,13 @@ export interface UseFunctionPlannerResult {
   errorMessage: string | null;
   setErrorMessage: (msg: string | null) => void;
 }
+
+type PlannerHandle = {
+  model: { markSynced: (meta?: { source?: string }) => void };
+  diagram: { requestUpdate?: () => void; zoomToFit?: () => void };
+  setExternalAuthors: (names: string[] | null) => void;
+  destroy: () => void;
+};
 
 /**
  * Mounts the function-planner-ui into a host div and binds it to a ticketed Yjs room.
@@ -56,6 +70,8 @@ export function useFunctionPlanner({
   initialModel = null,
   readonly = false,
   adminMode = false,
+  showLoadJSON = false,
+  externalAuthors = null,
   enabled = true,
   extraFabs = []
 }: UseFunctionPlannerOptions): UseFunctionPlannerResult {
@@ -71,6 +87,9 @@ export function useFunctionPlanner({
   titleRef.current = title;
   const extraFabsRef = useRef(extraFabs);
   extraFabsRef.current = extraFabs;
+  const externalAuthorsRef = useRef(externalAuthors);
+  externalAuthorsRef.current = externalAuthors;
+  const handleRef = useRef<PlannerHandle | null>(null);
 
   // Remount when fab titles/icons/disabled change; onClick always read from ref.
   const extraFabsKey = JSON.stringify(
@@ -110,6 +129,8 @@ export function useFunctionPlanner({
       }))
     );
 
+    const initialAuthors = externalAuthorsRef.current;
+
     const handle = init(host, planId, {
       ydoc,
       useIndexedDB: false,
@@ -126,13 +147,24 @@ export function useFunctionPlanner({
       canClaimFuncs: cfg.canClaimFuncs,
       callGraphOnly: cfg.callGraphOnly,
       showSaveJSON: cfg.showSaveJSON,
+      showLoadJSON,
+      externalAuthors: initialAuthors,
       readonly,
       adminMode,
       licenseKey: licenseKey || undefined,
       extraFabs: wiredExtraFabs
-    });
+    }) as PlannerHandle;
 
-    const diagram = handle.diagram as { requestUpdate?: () => void; zoomToFit?: () => void };
+    handleRef.current = handle;
+
+    const applyAuthorsAfterSync = (): void => {
+      const names = externalAuthorsRef.current;
+      if (names != null) {
+        handle.setExternalAuthors(names);
+      }
+    };
+
+    const diagram = handle.diagram;
     const refreshDiagramSize = (): void => {
       diagram.requestUpdate?.();
     };
@@ -153,6 +185,7 @@ export function useFunctionPlanner({
       if (isSynced) {
         setStatus('synced');
         handle.model.markSynced({ source: 'websocket' });
+        applyAuthorsAfterSync();
         requestAnimationFrame(() => {
           refreshDiagramSize();
           diagram.zoomToFit?.();
@@ -165,6 +198,7 @@ export function useFunctionPlanner({
     if (provider.synced) {
       setStatus('synced');
       handle.model.markSynced({ source: 'websocket' });
+      applyAuthorsAfterSync();
       requestAnimationFrame(() => {
         refreshDiagramSize();
         diagram.zoomToFit?.();
@@ -175,11 +209,21 @@ export function useFunctionPlanner({
       resizeObserver?.disconnect();
       provider.off('status', onStatus);
       provider.off('sync', onSync);
+      handleRef.current = null;
       handle.destroy();
       provider.destroy();
       ydoc.destroy();
     };
-  }, [enabled, roomSegment, ticket, planId, readonly, adminMode, extraFabsKey]);
+  }, [enabled, roomSegment, ticket, planId, readonly, adminMode, showLoadJSON, extraFabsKey]);
+
+  // Live-update authors when membership changes without remounting the Y.Doc.
+  useEffect(() => {
+    const handle = handleRef.current;
+    if (!handle || externalAuthors == null) {
+      return;
+    }
+    handle.setExternalAuthors(externalAuthors);
+  }, [externalAuthors]);
 
   return { hostRef, status, errorMessage, setErrorMessage };
 }

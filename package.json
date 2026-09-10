@@ -1,0 +1,18 @@
+{
+  "name": "function-planner",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/server",
+    "apps/client",
+    "packages/shared"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/shared && npm run build -w apps/server && npm run build -w apps/client",
+    "dev": "npm run dev -w apps/server",
+    "test": "npm run test -w packages/shared && npm run test -w apps/server && npm run test -w apps/client"
+  },
+  "overrides": {
+    "yjs": "13.6.30"
+  }
+}

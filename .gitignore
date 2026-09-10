@@ -1,0 +1,10 @@
+node_modules
+.env
+config.json
+.DS_Store
+coverage
+dist
+build
+*.log
+apps/server/generated
+apps/server/prisma/dev.db

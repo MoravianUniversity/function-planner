@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  INSTRUCTOR
+  TA
+  STUDENT
+}
+
+enum StudentPlanState {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETE
+}
+
+enum JoinRequestStatus {
+  PENDING
+  REJECTED
+}
+
+model User {
+  id         String       @id @default(cuid())
+  googleSub  String?      @unique
+  email      String       @unique
+  firstName  String
+  lastName   String
+  enabled    Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  enrollments Enrollment[]
+  memberships StudentPlanMember[]
+  joinRequests JoinRequest[]
+}
+
+model Course {
+  id          String       @id @default(cuid())
+  name        String
+  term        String
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  enrollments Enrollment[]
+  basePlans   BasePlan[]
+  studentPlans StudentPlan[]
+
+  @@index([startsAt])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  role      Role
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  course    Course   @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId, role])
+  @@index([courseId, role])
+}
+
+model BasePlan {
+  id         String
+  courseId   String
+  title      String
+  content    String   @default("")
+  yjsState   Bytes?
+  published  Boolean  @default(false)
+  settings   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  course     Course   @relation(fields: [courseId], references: [id])
+  studentPlans StudentPlan[]
+
+  @@id([courseId, id])
+  @@index([courseId, published])
+}
+
+model StudentPlan {
+  id          String           @id @default(cuid())
+  courseId    String
+  basePlanId  String
+  title       String
+  content     String           @default("")
+  yjsState    Bytes?
+  state       StudentPlanState @default(NOT_STARTED)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  course      Course           @relation(fields: [courseId], references: [id])
+  basePlan    BasePlan         @relation(fields: [courseId, basePlanId], references: [courseId, id])
+  members     StudentPlanMember[]
+  joinRequests JoinRequest[]
+
+  @@index([courseId])
+  @@index([basePlanId])
+}
+
+model StudentPlanMember {
+  id            String      @id @default(cuid())
+  studentPlanId String
+  userId        String
+  createdAt     DateTime    @default(now())
+  studentPlan   StudentPlan @relation(fields: [studentPlanId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@unique([studentPlanId, userId])
+}
+
+model JoinRequest {
+  id              String            @id @default(cuid())
+  studentPlanId   String
+  requesterUserId String
+  status          JoinRequestStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  studentPlan     StudentPlan       @relation(fields: [studentPlanId], references: [id], onDelete: Cascade)
+  requester       User              @relation(fields: [requesterUserId], references: [id])
+
+  @@unique([studentPlanId, requesterUserId])
+  @@index([requesterUserId])
+}

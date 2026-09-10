@@ -45,7 +45,7 @@ export const DEFAULT_PLAN_CONFIG: PlanConfig = {
   docStyle: 'numpy',
   canClaimFuncs: false,
   callGraphOnly: false,
-  showSaveJSON: true
+  showSaveJSON: false
 };
 
 function toStringArray(value: unknown, fallback: string[]): string[] {

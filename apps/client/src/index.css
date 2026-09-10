@@ -139,6 +139,17 @@ textarea {
   border-color: #222;
 }
 
+.app-btn-danger {
+  background: #b91c1c;
+  color: #fff !important;
+  border-color: #991b1b;
+}
+
+.app-btn-danger:hover {
+  background: #991b1b;
+  border-color: #7f1d1d;
+}
+
 .app-link-back {
   text-decoration: none;
   color: #111;

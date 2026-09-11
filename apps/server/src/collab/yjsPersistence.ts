@@ -28,7 +28,6 @@ type YMapLike = {
 };
 
 type YjsDoc = {
-  getText: (name: string) => { toString: () => string; length: number; insert: (i: number, s: string) => void };
   getMap: (name: string) => YMapLike;
   transact: (fn: () => void) => void;
   on: (event: 'update', handler: (...args: unknown[]) => void) => void;
@@ -63,14 +62,10 @@ function exportPlannerContent(doc: YjsDoc): string {
 
 /**
  * Prefer map-based planner JSON when present so base-plan `content` stays a
- * usable seed for new student docs. Fall back to legacy Y.Text('content').
+ * usable seed for new student docs.
  */
 function contentForPersist(doc: YjsDoc): string {
-  if (plannerMapsNonEmpty(doc)) {
-    return exportPlannerContent(doc);
-  }
-  const ytext = doc.getText('content');
-  return ytext.length > 0 ? ytext.toString() : '';
+  return plannerMapsNonEmpty(doc) ? exportPlannerContent(doc) : '';
 }
 
 async function loadAndBind(docName: string, doc: YjsDoc): Promise<void> {

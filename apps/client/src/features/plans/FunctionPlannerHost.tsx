@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useFunctionPlanner, type PlannerExtraFab, type UseFunctionPlannerOptions } from './useFunctionPlanner';
-import type { YjsCollabStatus } from './useYjsTextarea';
+import type { YjsCollabStatus } from './yjsCollabStatus';
 
 export type { PlannerExtraFab };
 

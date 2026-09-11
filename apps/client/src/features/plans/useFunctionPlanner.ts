@@ -5,8 +5,9 @@ import init, { BASIC_MODEL } from 'function-planner-ui';
 import 'function-planner-ui/style.css';
 import type { PlanConfig } from '@function-planner/shared';
 import { watchPlannerTheme } from '../../theme';
-import type { YjsCollabStatus } from './useYjsTextarea';
+import type { YjsCollabStatus } from './yjsCollabStatus';
 
+export type { YjsCollabStatus };
 function yjsWebSocketBaseUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}/yjs`;

@@ -215,7 +215,7 @@ router.get('/entry/:identifier', requireAuth, loadCourseContext, async (req, res
 
     const studentPlan = await prisma.studentPlan.findFirst({
       where: { id: identifier, courseId },
-      include: { members: true }
+      include: { members: true, basePlan: { select: { title: true } } }
     });
 
     if (studentPlan) {
@@ -224,7 +224,7 @@ router.get('/entry/:identifier', requireAuth, loadCourseContext, async (req, res
         const body: PlanEntryResponse = {
           kind: 'student',
           studentPlanId: studentPlan.id,
-          title: studentPlan.title,
+          title: studentPlan.basePlan.title,
           basePlanId: studentPlan.basePlanId
         };
         return res.json(body);
@@ -258,14 +258,15 @@ router.get('/entry/:identifier', requireAuth, loadCourseContext, async (req, res
         courseId,
         basePlanId: basePlan.id,
         members: { some: { userId: user.id } }
-      }
+      },
+      include: { basePlan: { select: { title: true } } }
     });
 
     if (myPlan) {
       const body: PlanEntryResponse = {
         kind: 'student',
         studentPlanId: myPlan.id,
-        title: myPlan.title,
+        title: myPlan.basePlan.title,
         basePlanId: myPlan.basePlanId
       };
       return res.json(body);
@@ -297,11 +298,19 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
       where,
       include: {
         members: { include: { user: true } },
-        basePlan: true
+        basePlan: { select: { title: true } }
       },
       orderBy: { updatedAt: 'desc' }
     });
-    res.json(plans);
+    res.json(
+      plans.map((plan) => ({
+        id: plan.id,
+        title: plan.basePlan.title,
+        state: plan.state,
+        basePlanId: plan.basePlanId,
+        members: plan.members
+      }))
+    );
   } catch (error) {
     next(error);
   }
@@ -318,7 +327,8 @@ router.get('/students/joinable', requireAuth, loadCourseContext, requireRole('ST
     const plans = await prisma.studentPlan.findMany({
       where: { courseId, basePlanId },
       include: {
-        members: { include: { user: true } }
+        members: { include: { user: true } },
+        basePlan: { select: { title: true } }
       },
       orderBy: { updatedAt: 'desc' }
     });
@@ -333,7 +343,7 @@ router.get('/students/joinable', requireAuth, loadCourseContext, requireRole('ST
       const activeSet = new Set(activeUserIds);
       joinable.push({
         id: plan.id,
-        title: plan.title,
+        title: plan.basePlan.title,
         activeUserIds,
         members: plan.members.map((m) => ({
           userId: m.userId,
@@ -444,7 +454,6 @@ router.post('/students/start', requireAuth, loadCourseContext, requireRole('STUD
       data: {
         basePlanId: payload.basePlanId,
         courseId,
-        title: basePlan.title,
         content: '',
         state: 'IN_PROGRESS',
         members: {
@@ -720,7 +729,7 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
       id: plan.id,
       courseId: plan.courseId,
       basePlanId: plan.basePlanId,
-      title: plan.title,
+      title: plan.basePlan.title,
       content: plan.content,
       state: plan.state,
       updatedAt: plan.updatedAt,

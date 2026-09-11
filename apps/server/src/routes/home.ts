@@ -14,9 +14,14 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
       prisma.basePlan.findMany({ where: { courseId }, orderBy: { updatedAt: 'desc' } }),
       prisma.studentPlan.findMany({
         where: { courseId, members: { some: { userId: user.id } } },
+        include: { basePlan: { select: { title: true } } },
         orderBy: { updatedAt: 'desc' }
       }),
-      prisma.studentPlan.findMany({ where: { courseId }, orderBy: { updatedAt: 'desc' } }),
+      prisma.studentPlan.findMany({
+        where: { courseId },
+        include: { basePlan: { select: { title: true } } },
+        orderBy: { updatedAt: 'desc' }
+      }),
       prisma.course.findUniqueOrThrow({ where: { id: courseId } })
     ]);
 
@@ -29,16 +34,29 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
       ? basePlans
       : basePlans.filter((p: { published: boolean }) => p.published);
 
+    const mapStudentPlan = (sp: {
+      id: string;
+      basePlanId: string;
+      state: string;
+      basePlan: { title: string };
+    }) => ({
+      id: sp.id,
+      basePlanId: sp.basePlanId,
+      title: sp.basePlan.title,
+      state: sp.state,
+      readonly: isCourseReadonly(course.endsAt)
+    });
+
     res.json({
       roles,
       readonly: isCourseReadonly(course.endsAt),
       studentView: {
-        myPlans: myStudentPlans,
+        myPlans: myStudentPlans.map(mapStudentPlan),
         availablePublishedPlans: unstartedPublishedPlans
       },
       staffView: {
         basePlans: staffBasePlans,
-        studentPlans: allStudentPlans
+        studentPlans: allStudentPlans.map(mapStudentPlan)
       }
     });
   } catch (error) {

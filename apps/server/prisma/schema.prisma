@@ -88,7 +88,6 @@ model StudentPlan {
   id          String           @id @default(cuid())
   courseId    String
   basePlanId  String
-  title       String
   content     String           @default("")
   yjsState    Bytes?
   state       StudentPlanState @default(NOT_STARTED)

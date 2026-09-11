@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PendingJoinRequestsResponse } from '@function-planner/shared';
+import type { PendingJoinRequestsResponse, PlanConfig } from '@function-planner/shared';
 import { parsePlanConfig, parsePlannerInitialModel, studentPlanRoomSegment } from '@function-planner/shared';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faChalkboardUser, faCheck, faXmark } from '@fortawesome/free-solid-svg-icons';
@@ -11,6 +11,10 @@ import type { CoursesResponse } from '../../types/api';
 import { AppDialog } from '../../components/ui/AppDialog';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
 import type { PlannerExtraFab } from './useFunctionPlanner';
+
+function configFingerprint(title: string, settings: PlanConfig): string {
+  return JSON.stringify({ title, settings });
+}
 
 /** Font Awesome Free house (solid) path as inline SVG for planner FABs. */
 const HOME_ICON =
@@ -105,6 +109,25 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
     () => parsePlannerInitialModel(plan?.basePlanContent),
     [plan?.basePlanContent]
   );
+
+  const plannerEnabled = Boolean(plan && roomOk);
+  const mountedConfigFingerprintRef = useRef<string | null>(null);
+  const currentConfigFingerprint =
+    plan != null ? configFingerprint(plan.title, settings) : null;
+
+  useEffect(() => {
+    if (!plannerEnabled || currentConfigFingerprint == null) {
+      return;
+    }
+    if (mountedConfigFingerprintRef.current == null) {
+      mountedConfigFingerprintRef.current = currentConfigFingerprint;
+    }
+  }, [plannerEnabled, currentConfigFingerprint]);
+
+  const configChangedSinceMount =
+    mountedConfigFingerprintRef.current != null &&
+    currentConfigFingerprint != null &&
+    mountedConfigFingerprintRef.current !== currentConfigFingerprint;
 
   useEffect(() => {
     if (ticketPayload && ticketPayload.roomSegment !== expectedRoom) {
@@ -246,6 +269,24 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
       </span>
     ) : null;
 
+  const configRefreshOverlay = configChangedSinceMount ? (
+    <div className="app-planner-join-banner" role="status">
+      <p>
+        This assignment&apos;s configuration was updated.{' '}
+        <a
+          href={typeof window !== 'undefined' ? window.location.href : '#'}
+          onClick={(e) => {
+            e.preventDefault();
+            window.location.reload();
+          }}
+        >
+          Refresh
+        </a>{' '}
+        to apply changes.
+      </p>
+    </div>
+  ) : null;
+
   const joinOverlay = pendingRequest ? (
     <div className="app-planner-join-banner" role="status">
       <p>
@@ -275,6 +316,14 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
     </div>
   ) : null;
 
+  const topOverlay =
+    configRefreshOverlay || joinOverlay ? (
+      <>
+        {configRefreshOverlay}
+        {joinOverlay}
+      </>
+    ) : null;
+
   return (
     <>
       <FunctionPlannerHost
@@ -286,11 +335,11 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         initialModel={initialModel}
         readonly={!canEdit}
         adminMode={Boolean(isInstructor && canEdit && !plan.isMember)}
-        enabled={Boolean(plan && roomOk)}
+        enabled={plannerEnabled}
         extraFabs={extraFabs}
         members={plan.members}
         currentUserId={plan.currentUserId}
-        topOverlay={joinOverlay}
+        topOverlay={topOverlay}
         viewModeBadge={viewModeBadge}
       />
 

@@ -48,6 +48,17 @@ declare module 'function-planner-ui' {
     callGraphOnly?: boolean;
     showSaveJSON?: boolean;
     showLoadJSON?: boolean;
+    showTestDocumentation?: boolean;
+    showGlobalCode?: boolean;
+    showTestGlobalCode?: boolean;
+    /** Regex of function names that show function code; empty = none. */
+    showCodeFor?: string;
+    /** Regex of function names that show test code; empty = none. */
+    showTestCodeFor?: string;
+    /** true=all module fields, false=none, or list of field names. */
+    moduleReadOnly?: boolean | string[];
+    /** Per-function read-only rules: regex `for` + fields (true=all or field names). Matching rules merge. */
+    functionReadOnly?: { for: string; fields: true | string[] }[];
     /** When non-null, authors are locked to this list (plan members). */
     externalAuthors?: string[] | null;
     ydoc?: Doc;

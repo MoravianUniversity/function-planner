@@ -7,8 +7,14 @@ import { toast } from 'sonner';
 import {
   DEFAULT_PLAN_CONFIG,
   docStyleValues,
+  functionReadOnlyFieldValues,
+  moduleReadOnlyFieldValues,
   parsePlanConfig,
   type DocStyle,
+  type FunctionReadOnlyField,
+  type FunctionReadOnlyRule,
+  type ModuleReadOnly,
+  type ModuleReadOnlyField,
   type PlanConfig
 } from '@function-planner/shared';
 import { apiGet, apiSend } from '../../api/client';
@@ -18,6 +24,78 @@ const BASE_PLAN_CONFIG_TOAST_ID = 'base-plan-config-save';
 const BASE_PLAN_PUBLISH_TOAST_ID = 'base-plan-publish';
 const COPY_PLAN_URL_TOAST_ID = 'copy-published-plan-url';
 const DOC_STYLE_OPTIONS = docStyleValues;
+
+const MODULE_READONLY_FIELD_LABELS: Record<ModuleReadOnlyField, string> = {
+  documentation: 'documentation',
+  testDocumentation: 'testDocumentation',
+  globalCode: 'globalCode',
+  testGlobalCode: 'testGlobalCode'
+};
+
+const FUNCTION_READONLY_FIELD_LABELS: Record<FunctionReadOnlyField, string> = {
+  name: 'name',
+  params: 'params',
+  returns: 'returns',
+  desc: 'desc',
+  io: 'io',
+  testable: 'testable',
+  owner: 'owner',
+  code: 'code',
+  testCode: 'testCode',
+  calls: 'calls',
+  callsInto: 'callsInto',
+  callsOutOf: 'callsOutOf'
+};
+
+type ModuleReadOnlyMode = 'all' | 'none' | 'custom';
+type FunctionReadOnlyMode = 'all' | 'custom';
+
+function emptyFunctionReadOnlyRule(): FunctionReadOnlyRule {
+  return { for: '', fields: true };
+}
+
+function storedModuleReadOnly(mode: ModuleReadOnlyMode, fields: ModuleReadOnlyField[]): ModuleReadOnly {
+  if (mode === 'all') {
+    return true;
+  }
+  if (mode === 'none') {
+    return false;
+  }
+  return fields;
+}
+
+function splitModuleReadOnly(value: ModuleReadOnly): {
+  mode: ModuleReadOnlyMode;
+  fields: ModuleReadOnlyField[];
+} {
+  if (value === true) {
+    return { mode: 'all', fields: [...moduleReadOnlyFieldValues] };
+  }
+  if (value === false) {
+    return { mode: 'none', fields: [] };
+  }
+  return { mode: 'custom', fields: value };
+}
+
+function formatModuleReadOnly(value: ModuleReadOnly): string {
+  if (value === true) {
+    return 'all';
+  }
+  if (value === false) {
+    return 'none';
+  }
+  return value.length === 0 ? 'custom (none selected)' : `custom (${value.join(', ')})`;
+}
+
+function equalModuleReadOnly(left: ModuleReadOnly, right: ModuleReadOnly): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return equalStringArrays(left, right);
+  }
+  return false;
+}
 
 export function BasePlanManagePage({
   courseId,
@@ -39,6 +117,14 @@ export function BasePlanManagePage({
   const [canClaimFuncs, setCanClaimFuncs] = useState(DEFAULT_PLAN_CONFIG.canClaimFuncs);
   const [callGraphOnly, setCallGraphOnly] = useState(DEFAULT_PLAN_CONFIG.callGraphOnly);
   const [showSaveJSON, setShowSaveJSON] = useState(DEFAULT_PLAN_CONFIG.showSaveJSON);
+  const [showTestDocumentation, setShowTestDocumentation] = useState(DEFAULT_PLAN_CONFIG.showTestDocumentation);
+  const [showGlobalCode, setShowGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showGlobalCode);
+  const [showTestGlobalCode, setShowTestGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showTestGlobalCode);
+  const [showCodeFor, setShowCodeFor] = useState(DEFAULT_PLAN_CONFIG.showCodeFor);
+  const [showTestCodeFor, setShowTestCodeFor] = useState(DEFAULT_PLAN_CONFIG.showTestCodeFor);
+  const [moduleReadOnlyMode, setModuleReadOnlyMode] = useState<ModuleReadOnlyMode>('none');
+  const [moduleReadOnlyFields, setModuleReadOnlyFields] = useState<ModuleReadOnlyField[]>([]);
+  const [functionReadOnly, setFunctionReadOnly] = useState<FunctionReadOnlyRule[]>([]);
   const [configExpanded, setConfigExpanded] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'success' | 'error'>('idle');
   const copyResetTimeoutRef = useRef<number | null>(null);
@@ -86,6 +172,23 @@ export function BasePlanManagePage({
     setCanClaimFuncs(config.canClaimFuncs);
     setCallGraphOnly(config.callGraphOnly);
     setShowSaveJSON(config.showSaveJSON);
+    setShowTestDocumentation(config.showTestDocumentation);
+    setShowGlobalCode(config.showGlobalCode);
+    setShowTestGlobalCode(config.showTestGlobalCode);
+    setShowCodeFor(config.showCodeFor);
+    setShowTestCodeFor(config.showTestCodeFor);
+    const split = splitModuleReadOnly(config.moduleReadOnly);
+    setModuleReadOnlyMode(split.mode);
+    setModuleReadOnlyFields(split.fields);
+    setFunctionReadOnly((prev) => {
+      const fromServer: FunctionReadOnlyRule[] = config.functionReadOnly.map((rule) => ({
+        for: rule.for,
+        fields: rule.fields === true ? true : [...rule.fields]
+      }));
+      // Keep in-progress rows (empty regex) across saves/refetch.
+      const drafts = prev.filter((rule) => !rule.for.trim());
+      return drafts.length > 0 ? [...fromServer, ...drafts] : fromServer;
+    });
   }, [basePlan]);
 
   useEffect(() => {
@@ -111,6 +214,14 @@ export function BasePlanManagePage({
         canClaimFuncs,
         callGraphOnly,
         showSaveJSON,
+        showTestDocumentation,
+        showGlobalCode,
+        showTestGlobalCode,
+        showCodeFor,
+        showTestCodeFor,
+        moduleReadOnlyMode,
+        moduleReadOnlyFields,
+        functionReadOnly,
         ...overrides
       };
       if (!s.title.trim()) {
@@ -136,7 +247,14 @@ export function BasePlanManagePage({
         docStyle: s.docStyle,
         canClaimFuncs: s.canClaimFuncs,
         callGraphOnly: s.callGraphOnly,
-        showSaveJSON: s.showSaveJSON
+        showSaveJSON: s.showSaveJSON,
+        showTestDocumentation: s.showTestDocumentation,
+        showGlobalCode: s.showGlobalCode,
+        showTestGlobalCode: s.showTestGlobalCode,
+        showCodeFor: s.showCodeFor,
+        showTestCodeFor: s.showTestCodeFor,
+        moduleReadOnly: storedModuleReadOnly(s.moduleReadOnlyMode, s.moduleReadOnlyFields),
+        functionReadOnly: sanitizeFunctionReadOnly(s.functionReadOnly)
       };
 
       const sparseConfig = toSparseConfig(nextConfig);
@@ -278,6 +396,19 @@ export function BasePlanManagePage({
             <p><strong>Functions can be claimed:</strong> {canClaimFuncs ? 'Yes' : 'No'}</p>
             <p><strong>Call graph only mode:</strong> {callGraphOnly ? 'Yes' : 'No'}</p>
             <p><strong>Show Save as JSON:</strong> {showSaveJSON ? 'Yes' : 'No'}</p>
+            <p><strong>Show test documentation:</strong> {showTestDocumentation ? 'Yes' : 'No'}</p>
+            <p><strong>Show global code:</strong> {showGlobalCode ? 'Yes' : 'No'}</p>
+            <p><strong>Show test global code:</strong> {showTestGlobalCode ? 'Yes' : 'No'}</p>
+            <p><strong>Show function code for:</strong> {showCodeFor || '(none)'}</p>
+            <p><strong>Show test code for:</strong> {showTestCodeFor || '(none)'}</p>
+            <p>
+              <strong>Module readonly:</strong>{' '}
+              {formatModuleReadOnly(storedModuleReadOnly(moduleReadOnlyMode, moduleReadOnlyFields))}
+            </p>
+            <p>
+              <strong>Function readonly:</strong>{' '}
+              {formatFunctionReadOnly(functionReadOnly)}
+            </p>
             <p><strong>Docstring style:</strong> {docStyle}</p>
           </div>
         ) : (
@@ -425,6 +556,246 @@ export function BasePlanManagePage({
                 />
                 <ConfigFieldTitle fieldKey="showSaveJSON" />
               </label>
+              <label className="app-checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={showTestDocumentation}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShowTestDocumentation(checked);
+                    persistConfig({ showTestDocumentation: checked });
+                  }}
+                />
+                <ConfigFieldTitle fieldKey="showTestDocumentation" />
+              </label>
+              <label className="app-checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={showGlobalCode}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShowGlobalCode(checked);
+                    persistConfig({ showGlobalCode: checked });
+                  }}
+                />
+                <ConfigFieldTitle fieldKey="showGlobalCode" />
+              </label>
+              <label className="app-checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={showTestGlobalCode}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShowTestGlobalCode(checked);
+                    persistConfig({ showTestGlobalCode: checked });
+                  }}
+                />
+                <ConfigFieldTitle fieldKey="showTestGlobalCode" />
+              </label>
+              <div className="app-config-form-full">
+                <label htmlFor="plan-show-code-for">
+                  <ConfigFieldTitle fieldKey="showCodeFor" />
+                </label>
+                <input
+                  id="plan-show-code-for"
+                  type="text"
+                  className="code-font"
+                  value={showCodeFor}
+                  placeholder="e.g. ^(main|helper)$ or .*"
+                  onChange={(e) => setShowCodeFor(e.target.value)}
+                  onBlur={(e) => persistConfig({ showCodeFor: e.target.value })}
+                />
+              </div>
+              <div className="app-config-form-full">
+                <label htmlFor="plan-show-test-code-for">
+                  <ConfigFieldTitle fieldKey="showTestCodeFor" />
+                </label>
+                <input
+                  id="plan-show-test-code-for"
+                  type="text"
+                  className="code-font"
+                  value={showTestCodeFor}
+                  placeholder="e.g. ^(add|multiply)$ or .*"
+                  onChange={(e) => setShowTestCodeFor(e.target.value)}
+                  onBlur={(e) => persistConfig({ showTestCodeFor: e.target.value })}
+                />
+              </div>
+              <div className="app-config-form-full">
+                <label htmlFor="plan-module-readonly">
+                  <ConfigFieldTitle fieldKey="moduleReadOnly" />
+                </label>
+                <select
+                  id="plan-module-readonly"
+                  value={moduleReadOnlyMode}
+                  onChange={(e) => {
+                    const mode = e.target.value as ModuleReadOnlyMode;
+                    const fields =
+                      mode === 'custom'
+                        ? moduleReadOnlyMode === 'all'
+                          ? [...moduleReadOnlyFieldValues]
+                          : moduleReadOnlyFields
+                        : moduleReadOnlyFields;
+                    setModuleReadOnlyMode(mode);
+                    if (mode === 'custom' && moduleReadOnlyMode !== 'custom') {
+                      setModuleReadOnlyFields(fields);
+                    }
+                    persistConfig({ moduleReadOnlyMode: mode, moduleReadOnlyFields: fields });
+                  }}
+                >
+                  <option value="all">all</option>
+                  <option value="none">none</option>
+                  <option value="custom">custom</option>
+                </select>
+                {moduleReadOnlyMode === 'custom' ? (
+                  <div className="app-config-readonly-fields">
+                    {moduleReadOnlyFieldValues.map((field) => {
+                      const checked = moduleReadOnlyFields.includes(field);
+                      return (
+                        <label key={field} className="app-checkbox-inline">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              const nextFields: ModuleReadOnlyField[] = e.target.checked
+                                ? [...moduleReadOnlyFields.filter((f) => f !== field), field]
+                                : moduleReadOnlyFields.filter((f) => f !== field);
+                              setModuleReadOnlyFields(nextFields);
+                              persistConfig({
+                                moduleReadOnlyMode: 'custom',
+                                moduleReadOnlyFields: nextFields
+                              });
+                            }}
+                          />
+                          {MODULE_READONLY_FIELD_LABELS[field]}
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+              <div className="app-config-form-full app-config-function-readonly">
+                <div className="app-config-function-readonly-header">
+                  <label>
+                    <ConfigFieldTitle fieldKey="functionReadOnly" />
+                  </label>
+                  <button
+                    type="button"
+                    className="app-btn"
+                    onClick={() => {
+                      setFunctionReadOnly((prev) => [...prev, emptyFunctionReadOnlyRule()]);
+                    }}
+                  >
+                    Add rule
+                  </button>
+                </div>
+                {functionReadOnly.length === 0 ? (
+                  <p className="app-muted">No function readonly rules (students can edit all function fields).</p>
+                ) : (
+                  <ul className="app-config-function-readonly-list">
+                    {functionReadOnly.map((rule, index) => {
+                      const mode: FunctionReadOnlyMode = rule.fields === true ? 'all' : 'custom';
+                      const fields = rule.fields === true ? [] : rule.fields;
+                      return (
+                        <li key={index} className="app-config-function-readonly-rule">
+                          <div className="app-config-function-readonly-rule-row">
+                            <label htmlFor={`plan-func-ro-for-${index}`}>For</label>
+                            <input
+                              id={`plan-func-ro-for-${index}`}
+                              type="text"
+                              className="code-font"
+                              value={rule.for}
+                              placeholder="e.g. ^(main|helper)$ or .*"
+                              onChange={(e) => {
+                                const next = functionReadOnly.map((r, i) =>
+                                  i === index ? { ...r, for: e.target.value } : r
+                                );
+                                setFunctionReadOnly(next);
+                              }}
+                              onBlur={(e) => {
+                                const next = functionReadOnly.map((r, i) =>
+                                  i === index ? { ...r, for: e.target.value } : r
+                                );
+                                setFunctionReadOnly(next);
+                                persistConfig({ functionReadOnly: next });
+                              }}
+                            />
+                            <label htmlFor={`plan-func-ro-mode-${index}`}>Fields</label>
+                            <select
+                              id={`plan-func-ro-mode-${index}`}
+                              value={mode}
+                              onChange={(e) => {
+                                const nextMode = e.target.value as FunctionReadOnlyMode;
+                                const next = functionReadOnly.map((r, i) => {
+                                  if (i !== index) {
+                                    return r;
+                                  }
+                                  if (nextMode === 'all') {
+                                    return { ...r, fields: true as const };
+                                  }
+                                  return {
+                                    ...r,
+                                    fields:
+                                      r.fields === true
+                                        ? [...functionReadOnlyFieldValues]
+                                        : [...r.fields]
+                                  };
+                                });
+                                setFunctionReadOnly(next);
+                                if (next[index]?.for.trim()) {
+                                  persistConfig({ functionReadOnly: next });
+                                }
+                              }}
+                            >
+                              <option value="all">all</option>
+                              <option value="custom">custom</option>
+                            </select>
+                            <button
+                              type="button"
+                              className="app-btn"
+                              aria-label={`Remove readonly rule ${index + 1}`}
+                              onClick={() => {
+                                const next = functionReadOnly.filter((_, i) => i !== index);
+                                setFunctionReadOnly(next);
+                                persistConfig({ functionReadOnly: next });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          {mode === 'custom' ? (
+                            <div className="app-config-readonly-fields app-config-readonly-fields--nested">
+                              {functionReadOnlyFieldValues.map((field) => {
+                                const checked = fields.includes(field);
+                                return (
+                                  <label key={field} className="app-checkbox-inline">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={(e) => {
+                                        const nextFields: FunctionReadOnlyField[] = e.target.checked
+                                          ? [...fields.filter((f) => f !== field), field]
+                                          : fields.filter((f) => f !== field);
+                                        const next = functionReadOnly.map((r, i) =>
+                                          i === index ? { ...r, fields: nextFields } : r
+                                        );
+                                        setFunctionReadOnly(next);
+                                        if (next[index]?.for.trim()) {
+                                          persistConfig({ functionReadOnly: next });
+                                        }
+                                      }}
+                                    />
+                                    {FUNCTION_READONLY_FIELD_LABELS[field]}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
               <label htmlFor="plan-doc-style">
                 <ConfigFieldTitle fieldKey="docStyle" />
               </label>
@@ -512,6 +883,14 @@ interface ConfigFormState {
   canClaimFuncs: boolean;
   callGraphOnly: boolean;
   showSaveJSON: boolean;
+  showTestDocumentation: boolean;
+  showGlobalCode: boolean;
+  showTestGlobalCode: boolean;
+  showCodeFor: string;
+  showTestCodeFor: string;
+  moduleReadOnlyMode: ModuleReadOnlyMode;
+  moduleReadOnlyFields: ModuleReadOnlyField[];
+  functionReadOnly: FunctionReadOnlyRule[];
 }
 
 type ConfigFieldKey = keyof PlanConfig;
@@ -529,6 +908,13 @@ const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
   canClaimFuncs: 'Functions can be claimed',
   callGraphOnly: 'Call graph only mode',
   showSaveJSON: 'Show Save as JSON',
+  showTestDocumentation: 'Show test documentation',
+  showGlobalCode: 'Show global code',
+  showTestGlobalCode: 'Show test global code',
+  showCodeFor: 'Show function code for',
+  showTestCodeFor: 'Show test code for',
+  moduleReadOnly: 'Module readonly',
+  functionReadOnly: 'Function readonly'
 };
 
 const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
@@ -543,7 +929,14 @@ const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   docStyle: `Docstring style to use when exporting. Default: ${DEFAULT_PLAN_CONFIG.docStyle}`,
   canClaimFuncs: `If checked, functions can be claimed by one author for separate colorizing/exporting. Default: ${String(DEFAULT_PLAN_CONFIG.canClaimFuncs)}`,
   callGraphOnly: `If checked, only the call graph is shown and most problem checking is suppressed. Default: ${String(DEFAULT_PLAN_CONFIG.callGraphOnly)}`,
-  showSaveJSON: `If checked, the Save as JSON toolbar button is shown. Default: ${String(DEFAULT_PLAN_CONFIG.showSaveJSON)}`
+  showSaveJSON: `If checked, the Save as JSON toolbar button is shown. Default: ${String(DEFAULT_PLAN_CONFIG.showSaveJSON)}`,
+  showTestDocumentation: `If checked, students can see and edit module test documentation when any function is testable. Default: ${String(DEFAULT_PLAN_CONFIG.showTestDocumentation)}`,
+  showGlobalCode: `If checked, students can see and edit module-level global code. Default: ${String(DEFAULT_PLAN_CONFIG.showGlobalCode)}`,
+  showTestGlobalCode: `If checked, students can see and edit test setup / global test code. Default: ${String(DEFAULT_PLAN_CONFIG.showTestGlobalCode)}`,
+  showCodeFor: `Regex matched against function names to show the function code editor. Empty shows none; use .* for all. Prefer anchors for exact names, e.g. ^(main|helper)$ — without ^…$ a pattern like main also matches maintain. Default: (empty).`,
+  showTestCodeFor: `Regex matched against function names to show the test code editor (also requires Testable). Empty shows none; use .* for all. Prefer anchors for exact names, e.g. ^(add|multiply)$ — without ^…$ a pattern like add also matches address. Default: (empty).`,
+  moduleReadOnly: `Which module fields students cannot edit: all, none, or a custom subset (${moduleReadOnlyFieldValues.join(', ')}). Default: none.`,
+  functionReadOnly: `List of rules locking function fields for matching names. Each rule has a regex (prefer ^…$) and fields (all or a custom subset of ${functionReadOnlyFieldValues.join(', ')}). When multiple rules match, fields are unioned (all wins). Default: (none).`
 };
 
 function ConfigFieldTitle({fieldKey}: {fieldKey: ConfigFieldKey}) {
@@ -589,6 +982,27 @@ function toSparseConfig(config: PlanConfig): Record<string, unknown> {
   if (config.showSaveJSON !== DEFAULT_PLAN_CONFIG.showSaveJSON) {
     result.showSaveJSON = config.showSaveJSON;
   }
+  if (config.showTestDocumentation !== DEFAULT_PLAN_CONFIG.showTestDocumentation) {
+    result.showTestDocumentation = config.showTestDocumentation;
+  }
+  if (config.showGlobalCode !== DEFAULT_PLAN_CONFIG.showGlobalCode) {
+    result.showGlobalCode = config.showGlobalCode;
+  }
+  if (config.showTestGlobalCode !== DEFAULT_PLAN_CONFIG.showTestGlobalCode) {
+    result.showTestGlobalCode = config.showTestGlobalCode;
+  }
+  if (config.showCodeFor !== DEFAULT_PLAN_CONFIG.showCodeFor) {
+    result.showCodeFor = config.showCodeFor;
+  }
+  if (config.showTestCodeFor !== DEFAULT_PLAN_CONFIG.showTestCodeFor) {
+    result.showTestCodeFor = config.showTestCodeFor;
+  }
+  if (!equalModuleReadOnly(config.moduleReadOnly, DEFAULT_PLAN_CONFIG.moduleReadOnly)) {
+    result.moduleReadOnly = config.moduleReadOnly;
+  }
+  if (!equalFunctionReadOnly(config.functionReadOnly, DEFAULT_PLAN_CONFIG.functionReadOnly)) {
+    result.functionReadOnly = config.functionReadOnly;
+  }
   return result;
 }
 
@@ -601,8 +1015,43 @@ function parseNonNegativeInt(raw: string, label: string): number {
 }
 
 function equalStringArrays(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sanitizeFunctionReadOnly(rules: FunctionReadOnlyRule[]): FunctionReadOnlyRule[] {
+  return rules
+    .map((rule): FunctionReadOnlyRule => ({
+      for: rule.for.trim(),
+      fields: rule.fields === true ? true : [...rule.fields]
+    }))
+    .filter((rule) => rule.for.length > 0);
+}
+
+function formatFunctionReadOnly(rules: FunctionReadOnlyRule[]): string {
+  const cleaned = sanitizeFunctionReadOnly(rules);
+  if (cleaned.length === 0) {
+    return '(none)';
+  }
+  return cleaned
+    .map((rule) => {
+      const fields = rule.fields === true ? 'all' : rule.fields.join(', ') || '(no fields)';
+      return `${rule.for} → ${fields}`;
+    })
+    .join('; ');
+}
+
+function equalFunctionReadOnly(left: FunctionReadOnlyRule[], right: FunctionReadOnlyRule[]): boolean {
   if (left.length !== right.length) {
     return false;
   }
-  return left.every((value, index) => value === right[index]);
+  return left.every((rule, index) => {
+    const other = right[index];
+    if (rule.for !== other.for) {
+      return false;
+    }
+    if (rule.fields === true || other.fields === true) {
+      return rule.fields === other.fields;
+    }
+    return equalStringArrays(rule.fields, other.fields);
+  });
 }

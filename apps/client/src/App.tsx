@@ -11,6 +11,7 @@ import type { CoursesResponse, PublicAppConfig, SessionResponse } from './types/
 import { HomePage } from './features/home/HomePage';
 import { RosterPage } from './features/roster/RosterPage';
 import { BasePlanEditorPage } from './features/plans/BasePlanEditorPage';
+import { SolutionPlanEditorPage } from './features/plans/SolutionPlanEditorPage';
 import { UnifiedPlanPage } from './features/plans/UnifiedPlanPage';
 import { EditCourseDialog } from './features/home/EditCourseDialog';
 import { CreateCourseDialog } from './features/home/CreateCourseDialog';
@@ -170,6 +171,7 @@ function Shell() {
         <Route path="/" element={<HomePage courseId={courseId} />} />
         <Route path="/roster" element={<RosterPage courseId={courseId} />} />
         <Route path="/plans/:planId/edit" element={<BasePlanEditRoute courseId={courseId} />} />
+        <Route path="/plans/:planId/solution" element={<SolutionPlanRoute courseId={courseId} />} />
         <Route path="/plans/:planId" element={<UnifiedPlanPage courseId={courseId} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -183,6 +185,14 @@ function BasePlanEditRoute({ courseId }: { courseId: string }) {
     return <Navigate to="/" replace />;
   }
   return <BasePlanEditorPage courseId={courseId} />;
+}
+
+function SolutionPlanRoute({ courseId }: { courseId: string }) {
+  const { planId } = useParams<{ planId: string }>();
+  if (!planId) {
+    return <Navigate to="/" replace />;
+  }
+  return <SolutionPlanEditorPage courseId={courseId} />;
 }
 
 export default function App() {

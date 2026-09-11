@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import type {
@@ -10,7 +11,13 @@ import type {
 import {
   createBasePlanSchema,
   importBasePlansSchema,
+  mergeBaseIntoSolution,
+  parsePlanConfig,
+  parsePlannerModel,
+  solutionMergeSchema,
+  solutionPlanDocName,
   startStudentPlanSchema,
+  stringifyPlannerModel,
   studentPlanDocName,
   updateBasePlanSchema
 } from '@function-planner/shared';
@@ -21,6 +28,58 @@ import { getActiveStudentUserIds, hasActiveStudentMember } from '../collab/prese
 import { evictYjsDoc } from '../collab/yjsPersistence.js';
 
 const router = Router();
+
+function hashBaseContent(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
+function planHasSolution(plan: {
+  solutionContent: string;
+  solutionYjsState: Buffer | Uint8Array | null;
+  solutionBaseContentHash?: string | null;
+}): boolean {
+  return (
+    Boolean(plan.solutionBaseContentHash) ||
+    Boolean(plan.solutionContent.trim()) ||
+    Boolean(plan.solutionYjsState && plan.solutionYjsState.length > 0)
+  );
+}
+
+function planSolutionStale(plan: {
+  content: string;
+  solutionContent: string;
+  solutionYjsState: Buffer | Uint8Array | null;
+  solutionBaseContentHash: string | null;
+}): boolean {
+  if (!planHasSolution(plan)) {
+    return false;
+  }
+  return hashBaseContent(plan.content) !== plan.solutionBaseContentHash;
+}
+
+function toStaffBasePlanDetail(plan: {
+  id: string;
+  title: string;
+  content: string;
+  published: boolean;
+  settings: unknown;
+  updatedAt: Date;
+  solutionContent: string;
+  solutionYjsState: Buffer | Uint8Array | null;
+  solutionBaseContentHash: string | null;
+}) {
+  return {
+    id: plan.id,
+    title: plan.title,
+    content: plan.content,
+    published: plan.published,
+    settings: plan.settings,
+    updatedAt: plan.updatedAt,
+    solutionContent: plan.solutionContent,
+    hasSolution: planHasSolution(plan),
+    solutionStale: planSolutionStale(plan)
+  };
+}
 
 router.get('/base', requireAuth, loadCourseContext, requireRole('TA', 'INSTRUCTOR', 'STUDENT'), async (_req, res, next) => {
   try {
@@ -108,6 +167,8 @@ router.post('/import', requireAuth, loadCourseContext, requireRole('INSTRUCTOR')
         src.settings === null || src.settings === undefined ? undefined : (src.settings as Prisma.InputJsonValue);
 
       const resolvedId = await nextAvailableBasePlanId(courseId, src.id);
+      const hasSourceSolution =
+        Boolean(src.solutionBaseContentHash) || Boolean(src.solutionContent.trim());
       const copy = await prisma.basePlan.create({
         data: {
           courseId,
@@ -115,7 +176,13 @@ router.post('/import', requireAuth, loadCourseContext, requireRole('INSTRUCTOR')
           title: src.title,
           content: src.content,
           published: false,
-          ...(settingsPayload !== undefined ? { settings: settingsPayload } : {})
+          ...(settingsPayload !== undefined ? { settings: settingsPayload } : {}),
+          ...(hasSourceSolution
+            ? {
+                solutionContent: src.solutionContent,
+                solutionBaseContentHash: src.solutionBaseContentHash ?? hashBaseContent(src.content)
+              }
+            : {})
         }
       });
       created.push(copy);
@@ -177,13 +244,13 @@ router.patch('/base/:planId', requireAuth, loadCourseContext, requireRole('INSTR
     }
 
     if (Object.keys(updateData).length === 0) {
-      res.json(existing);
+      res.json(toStaffBasePlanDetail(existing));
       return;
     }
 
     await prisma.basePlan.updateMany({ where: { courseId, id: planId }, data: updateData });
     const updated = await prisma.basePlan.findFirstOrThrow({ where: { courseId, id: planId } });
-    res.json(updated);
+    res.json(toStaffBasePlanDetail(updated));
   } catch (error) {
     next(error);
   }
@@ -197,11 +264,68 @@ router.get('/base/:planId', requireAuth, loadCourseContext, requireRole('TA', 'I
     if (!plan) {
       return res.status(404).json({ message: 'Plan not found in this course.' });
     }
-    res.json(plan);
+    res.json(toStaffBasePlanDetail(plan));
   } catch (error) {
     next(error);
   }
 });
+
+/**
+ * Seed (reset) or field-aware merge of the staff solution from the current base template.
+ * Clears solutionYjsState and evicts the live solution room so the next open reloads from content.
+ */
+router.post(
+  '/base/:planId/solution/merge',
+  requireAuth,
+  loadCourseContext,
+  requireRole('TA', 'INSTRUCTOR'),
+  rejectReadonlyCourseWrites,
+  async (req, res, next) => {
+    try {
+      const { courseId } = res.locals.auth;
+      const planId = String(req.params.planId);
+      const { mode } = solutionMergeSchema.parse(req.body);
+
+      const plan = await prisma.basePlan.findFirst({ where: { courseId, id: planId } });
+      if (!plan) {
+        return res.status(404).json({ message: 'Plan not found in this course.' });
+      }
+
+      const config = parsePlanConfig(plan.settings);
+      const baseModel = parsePlannerModel(plan.content);
+      const contentHash = hashBaseContent(plan.content);
+
+      let nextSolutionContent: string;
+      if (mode === 'reset' || !planHasSolution(plan)) {
+        nextSolutionContent = plan.content;
+      } else {
+        const solutionModel = parsePlannerModel(plan.solutionContent);
+        if (!baseModel) {
+          nextSolutionContent = plan.content;
+        } else {
+          const merged = mergeBaseIntoSolution(baseModel, solutionModel, config);
+          nextSolutionContent = stringifyPlannerModel(merged);
+        }
+      }
+
+      await prisma.basePlan.updateMany({
+        where: { courseId, id: planId },
+        data: {
+          solutionContent: nextSolutionContent,
+          solutionYjsState: null,
+          solutionBaseContentHash: contentHash
+        }
+      });
+
+      evictYjsDoc(solutionPlanDocName(courseId, planId));
+
+      const updated = await prisma.basePlan.findFirstOrThrow({ where: { courseId, id: planId } });
+      res.json(toStaffBasePlanDetail(updated));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * Resolves a single `/plans/:identifier` URL for the current user (student plan id, base plan id, etc.).

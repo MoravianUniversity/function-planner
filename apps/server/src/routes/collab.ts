@@ -2,7 +2,9 @@ import { Router } from 'express';
 import {
   basePlanDocName,
   collabBasePlanTicketSchema,
+  collabSolutionPlanTicketSchema,
   collabStudentPlanTicketSchema,
+  solutionPlanDocName,
   studentPlanDocName,
   type Role
 } from '@function-planner/shared';
@@ -34,6 +36,39 @@ router.post('/ticket/base-plan', requireAuth, loadCourseContext, requireRole('TA
     }
 
     const docName = basePlanDocName(courseId, basePlanId);
+    const ttl = collabTicketTtlMs();
+    const ticket = mintCollabTicket(user.id, docName, ttl, 'staff');
+
+    res.json({
+      ticket,
+      ttlMs: ttl,
+      wsServerUrl: '/yjs',
+      roomSegment: docName.replace(/^yjs\//, '')
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/ticket/solution-plan', requireAuth, loadCourseContext, requireRole('TA', 'INSTRUCTOR'), async (req, res, next) => {
+  try {
+    const { courseId } = res.locals.auth as { courseId: string };
+    const parsed = collabSolutionPlanTicketSchema.parse(req.body);
+    if (parsed.courseId !== courseId) {
+      return res.status(400).json({ message: 'courseId does not match the active course.' });
+    }
+    const { basePlanId } = parsed;
+    const user = req.user as { id: string };
+
+    const plan = await prisma.basePlan.findFirst({
+      where: { courseId, id: basePlanId },
+      select: { id: true }
+    });
+    if (!plan) {
+      return res.status(404).json({ message: 'Plan not found in this course.' });
+    }
+
+    const docName = solutionPlanDocName(courseId, basePlanId);
     const ttl = collabTicketTtlMs();
     const ticket = mintCollabTicket(user.id, docName, ttl, 'staff');
 

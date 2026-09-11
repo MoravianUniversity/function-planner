@@ -88,3 +88,12 @@ export const collabStudentPlanTicketSchema = z.object({
   courseId: z.string().min(1),
   studentPlanId: z.string().min(1)
 });
+
+export const collabSolutionPlanTicketSchema = z.object({
+  courseId: z.string().min(1),
+  basePlanId: z.string().min(1)
+});
+
+export const solutionMergeSchema = z.object({
+  mode: z.enum(['merge', 'reset'])
+});

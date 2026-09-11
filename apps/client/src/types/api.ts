@@ -48,6 +48,9 @@ export interface BasePlanDetail {
   published: boolean;
   settings: unknown | null;
   updatedAt: string;
+  solutionContent: string;
+  hasSolution: boolean;
+  solutionStale: boolean;
 }
 
 export interface StaffStudentPlanRow {

@@ -19,11 +19,20 @@ export function studentPlanDocName(courseId: string, studentPlanId: string): str
   return `yjs/${studentPlanRoomSegment(courseId, studentPlanId)}`;
 }
 
+export function solutionPlanRoomSegment(courseId: string, basePlanId: string): string {
+  return `solution--${courseId}--${basePlanId}`;
+}
+
+export function solutionPlanDocName(courseId: string, basePlanId: string): string {
+  return `yjs/${solutionPlanRoomSegment(courseId, basePlanId)}`;
+}
+
 export type ParsedYjsDocName =
   | { kind: 'base'; courseId: string; basePlanId: string; docName: string; roomSegment: string }
-  | { kind: 'student'; courseId: string; studentPlanId: string; docName: string; roomSegment: string };
+  | { kind: 'student'; courseId: string; studentPlanId: string; docName: string; roomSegment: string }
+  | { kind: 'solution'; courseId: string; basePlanId: string; docName: string; roomSegment: string };
 
-/** Parse a full doc name (`yjs/...`) or room segment (`base--...` / `student--...`). */
+/** Parse a full doc name (`yjs/...`) or room segment (`base--...` / `student--...` / `solution--...`). */
 export function parseYjsDocName(raw: string): ParsedYjsDocName | null {
   const docName = raw.startsWith('yjs/') ? raw : `yjs/${raw}`;
   const roomSegment = docName.slice('yjs/'.length);
@@ -44,6 +53,9 @@ export function parseYjsDocName(raw: string): ParsedYjsDocName | null {
   }
   if (kind === 'student') {
     return { kind: 'student', courseId, studentPlanId: rest, docName, roomSegment };
+  }
+  if (kind === 'solution') {
+    return { kind: 'solution', courseId, basePlanId: rest, docName, roomSegment };
   }
   return null;
 }

@@ -94,6 +94,21 @@ async function loadAndBind(docName: string, doc: YjsDoc): Promise<void> {
     return;
   }
 
+  if (parsed.kind === 'solution') {
+    const plan = await prisma.basePlan.findFirst({
+      where: { courseId: parsed.courseId, id: parsed.basePlanId },
+      select: { solutionYjsState: true }
+    });
+    if (!plan) {
+      return;
+    }
+    if (plan.solutionYjsState && plan.solutionYjsState.length > 0) {
+      Y.applyUpdate(doc, new Uint8Array(plan.solutionYjsState));
+    }
+    // Empty solution docs seed on the client from solutionContent / base content.
+    return;
+  }
+
   const plan = await prisma.studentPlan.findFirst({
     where: { id: parsed.studentPlanId, courseId: parsed.courseId },
     select: { yjsState: true }
@@ -120,6 +135,14 @@ async function persistDoc(docName: string, doc: YjsDoc): Promise<void> {
     await prisma.basePlan.updateMany({
       where: { courseId: parsed.courseId, id: parsed.basePlanId },
       data: { yjsState: state, content }
+    });
+    return;
+  }
+
+  if (parsed.kind === 'solution') {
+    await prisma.basePlan.updateMany({
+      where: { courseId: parsed.courseId, id: parsed.basePlanId },
+      data: { solutionYjsState: state, solutionContent: content }
     });
     return;
   }

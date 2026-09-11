@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faCheck, faCopy, faGear, faXmark, faCircleCheck, faPenToSquare } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faCheck, faCopy, faGear, faXmark, faCircleCheck, faPenToSquare, faKey } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import {
   DEFAULT_PLAN_CONFIG,
@@ -375,6 +375,18 @@ export function BasePlanManagePage({
         </button>
         <Link to={`/plans/${basePlan.id}/edit`} className="app-btn">
           <FontAwesomeIcon icon={faPenToSquare} /> {canEditPlan ? 'Edit' : 'View'}
+        </Link>
+        <Link
+          to={`/plans/${basePlan.id}/solution`}
+          className="app-btn"
+          title={basePlan.solutionStale ? 'Solution may be out of date with the template' : undefined}
+        >
+          <FontAwesomeIcon icon={faKey} />{' '}
+          {basePlan.hasSolution
+            ? basePlan.solutionStale
+              ? 'Solution (stale)'
+              : 'Solution'
+            : 'Create Solution'}
         </Link>
       </div>
 

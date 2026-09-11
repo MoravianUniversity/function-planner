@@ -6,6 +6,9 @@ import App from './App';
 import 'sonner/dist/styles.css';
 import './index.css';
 import { ApiHttpError } from './api/client';
+import { applyAppTheme, getStoredTheme } from './theme';
+
+applyAppTheme(getStoredTheme());
 
 function shouldRetryQuery(failureCount: number, error: unknown): boolean {
   if (failureCount >= 1) {

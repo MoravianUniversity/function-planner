@@ -15,6 +15,26 @@ import { UnifiedPlanPage } from './features/plans/UnifiedPlanPage';
 import { EditCourseDialog } from './features/home/EditCourseDialog';
 import { CreateCourseDialog } from './features/home/CreateCourseDialog';
 import { Toaster } from 'sonner';
+import {
+  THEME_CHANGE_EVENT,
+  type AppTheme,
+  getDocumentTheme
+} from './theme';
+
+function useAppTheme(): AppTheme {
+  const [theme, setTheme] = useState<AppTheme>(() => getDocumentTheme());
+
+  useEffect(() => {
+    const onThemeChange = (event: Event): void => {
+      const detail = (event as CustomEvent<AppTheme>).detail;
+      setTheme(detail === 'dark' ? 'dark' : 'light');
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, onThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, onThemeChange);
+  }, []);
+
+  return theme;
+}
 
 function Shell() {
   const { courseId, setCourseId } = useCourseContext();
@@ -166,10 +186,11 @@ function BasePlanEditRoute({ courseId }: { courseId: string }) {
 }
 
 export default function App() {
+  const theme = useAppTheme();
   return (
     <CourseProvider>
       <Shell />
-      <Toaster richColors closeButton position="bottom-right" />
+      <Toaster theme={theme} richColors closeButton position="bottom-right" />
     </CourseProvider>
   );
 }

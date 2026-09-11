@@ -4,6 +4,7 @@ import { WebsocketProvider } from 'y-websocket';
 import init, { BASIC_MODEL } from 'function-planner-ui';
 import 'function-planner-ui/style.css';
 import type { PlanConfig } from '@function-planner/shared';
+import { watchPlannerTheme } from '../../theme';
 import type { YjsCollabStatus } from './useYjsTextarea';
 
 function yjsWebSocketBaseUrl(): string {
@@ -163,6 +164,7 @@ export function useFunctionPlanner({
     }) as PlannerHandle;
 
     handleRef.current = handle;
+    const stopWatchingTheme = watchPlannerTheme(host);
 
     const applyAuthorsAfterSync = (): void => {
       const names = externalAuthorsRef.current;
@@ -213,6 +215,7 @@ export function useFunctionPlanner({
     }
 
     return () => {
+      stopWatchingTheme();
       resizeObserver?.disconnect();
       provider.off('status', onStatus);
       provider.off('sync', onSync);

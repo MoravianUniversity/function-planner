@@ -43,7 +43,6 @@ Empty student docs seed from parseable base-plan JSON `content` when present; ot
 
 ## Intentionally incomplete
 
-- No email notifications for join requests
 - Claimable function owners use member display names (not stable user ids yet)
 
 ## Collaboration stack note

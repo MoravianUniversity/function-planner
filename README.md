@@ -41,10 +41,6 @@ Staff open a student plan instance from the base-plan manage page (or by student
 
 Empty student docs seed from parseable base-plan JSON `content` when present; otherwise a single `main` function.
 
-## Intentionally incomplete
-
-- Claimable function owners use member display names (not stable user ids yet)
-
 ## Collaboration stack note
 
 Browser clients use `y-websocket` + **Yjs 13** (`y-protocols`). The server must use the matching **`y-websocket@1.5.x` `bin/utils`** server helpers (also Yjs 13). Do not use `@y/websocket-server` (Yjs 14 / `@y/protocols`) — connections will succeed but documents will not sync.

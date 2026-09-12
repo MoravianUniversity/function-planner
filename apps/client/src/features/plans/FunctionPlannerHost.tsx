@@ -13,11 +13,11 @@ export interface PlannerMember {
   active: boolean;
 }
 
-type FunctionPlannerHostProps = Omit<UseFunctionPlannerOptions, 'externalAuthors'> & {
+type FunctionPlannerHostProps = Omit<UseFunctionPlannerOptions, 'externalAuthors' | 'authorLabels'> & {
   members?: PlannerMember[];
   /**
-   * When true (default if `members` is provided), lock authors to member display
-   * names for claiming/export. Base-plan editor omits members so authors stay template-style.
+   * When true (default if `members` is provided), lock authors to member emails
+   * for claiming/export. Base-plan editor omits members so authors stay template-style.
    */
   authorsFromMembers?: boolean;
   currentUserId?: string;
@@ -95,19 +95,29 @@ export function FunctionPlannerHost({
   ...plannerProps
 }: FunctionPlannerHostProps) {
   const memberList = members ?? [];
-  const externalAuthors = useMemo(() => {
+  const { externalAuthors, authorLabels } = useMemo(() => {
     if (!authorsFromMembers || members == null) {
-      return null;
+      return { externalAuthors: null as string[] | null, authorLabels: {} as Record<string, string> };
     }
     // Stable order by userId so Yjs author sync is deterministic across clients.
-    return [...members]
-      .sort((a, b) => a.userId.localeCompare(b.userId))
-      .map(memberAuthorLabel);
+    const sorted = [...members].sort((a, b) => a.userId.localeCompare(b.userId));
+    const labels: Record<string, string> = {};
+    const ids: string[] = [];
+    for (const m of sorted) {
+      const email = (m.email || '').trim();
+      if (!email) {
+        continue;
+      }
+      ids.push(email);
+      labels[email] = memberAuthorLabel(m);
+    }
+    return { externalAuthors: ids, authorLabels: labels };
   }, [authorsFromMembers, members]);
 
   const { hostRef, status } = useFunctionPlanner({
     ...plannerProps,
-    externalAuthors
+    externalAuthors,
+    authorLabels
   });
   const ordered = sortMembers(memberList, currentUserId);
 

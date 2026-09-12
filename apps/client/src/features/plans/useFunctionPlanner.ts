@@ -8,6 +8,9 @@ import { watchPlannerTheme } from '../../theme';
 import type { YjsCollabStatus } from './yjsCollabStatus';
 
 export type { YjsCollabStatus };
+
+const EMPTY_AUTHOR_LABELS: Record<string, string> = {};
+
 function yjsWebSocketBaseUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}/yjs`;
@@ -36,10 +39,12 @@ export interface UseFunctionPlannerOptions {
   /** Show Load from JSON (replaces whole model); for base-plan authoring. */
   showLoadJSON?: boolean;
   /**
-   * When set (including `[]`), authors are locked to this list (plan members).
-   * Omit / pass `null` for free-text authors (local demos / base-plan templates).
+   * When set (including `[]`), authors are locked to this list of stable ids
+   * (member emails). Omit / pass `null` for free-text authors (local demos / base-plan templates).
    */
   externalAuthors?: string[] | null;
+  /** Map of stable author id → display name (host-ephemeral; ids are what Yjs stores). */
+  authorLabels?: Record<string, string>;
   enabled?: boolean;
   /** Groups of FABs stacked above theme/settings/help. */
   extraFabs?: PlannerExtraFab[][];
@@ -55,7 +60,7 @@ export interface UseFunctionPlannerResult {
 type PlannerHandle = {
   model: { markSynced: (meta?: { source?: string }) => void };
   diagram: { requestUpdate?: () => void; zoomToFit?: () => void };
-  setExternalAuthors: (names: string[] | null) => void;
+  setExternalAuthors: (ids: string[] | null, labels?: Record<string, string>) => void;
   destroy: () => void;
 };
 
@@ -74,6 +79,7 @@ export function useFunctionPlanner({
   adminMode = false,
   showLoadJSON = false,
   externalAuthors = null,
+  authorLabels = EMPTY_AUTHOR_LABELS,
   enabled = true,
   extraFabs = []
 }: UseFunctionPlannerOptions): UseFunctionPlannerResult {
@@ -91,6 +97,8 @@ export function useFunctionPlanner({
   extraFabsRef.current = extraFabs;
   const externalAuthorsRef = useRef(externalAuthors);
   externalAuthorsRef.current = externalAuthors;
+  const authorLabelsRef = useRef(authorLabels);
+  authorLabelsRef.current = authorLabels;
   const handleRef = useRef<PlannerHandle | null>(null);
 
   // Remount when fab titles/icons/disabled change; onClick always read from ref.
@@ -132,6 +140,7 @@ export function useFunctionPlanner({
     );
 
     const initialAuthors = externalAuthorsRef.current;
+    const initialLabels = authorLabelsRef.current;
 
     const handle = init(host, planId, {
       ydoc,
@@ -158,6 +167,7 @@ export function useFunctionPlanner({
       functionReadOnly: cfg.functionReadOnly,
       showLoadJSON,
       externalAuthors: initialAuthors,
+      authorLabels: initialLabels,
       readonly,
       adminMode,
       licenseKey: licenseKey || undefined,
@@ -170,7 +180,7 @@ export function useFunctionPlanner({
     const applyAuthorsAfterSync = (): void => {
       const names = externalAuthorsRef.current;
       if (names != null) {
-        handle.setExternalAuthors(names);
+        handle.setExternalAuthors(names, authorLabelsRef.current);
       }
     };
 
@@ -227,14 +237,14 @@ export function useFunctionPlanner({
     };
   }, [enabled, roomSegment, ticket, planId, readonly, adminMode, showLoadJSON, extraFabsKey]);
 
-  // Live-update authors when membership changes without remounting the Y.Doc.
+  // Live-update authors when membership or display names change without remounting the Y.Doc.
   useEffect(() => {
     const handle = handleRef.current;
     if (!handle || externalAuthors == null) {
       return;
     }
-    handle.setExternalAuthors(externalAuthors);
-  }, [externalAuthors]);
+    handle.setExternalAuthors(externalAuthors, authorLabels);
+  }, [externalAuthors, authorLabels]);
 
   return { hostRef, status, errorMessage, setErrorMessage };
 }

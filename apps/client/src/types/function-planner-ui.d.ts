@@ -13,7 +13,8 @@ declare module 'function-planner-ui' {
     id: string;
     model: Doc | null;
     markSynced(meta?: { source?: string }): void;
-    syncExternalAuthors(names: string[]): void;
+    syncExternalAuthors(ids: string[], labels?: Record<string, string>): void;
+    notifyModelData(property: string): void;
     destroy(): void;
     exportModel(): object;
     importModel(data: object): void;
@@ -59,8 +60,10 @@ declare module 'function-planner-ui' {
     moduleReadOnly?: boolean | string[];
     /** Per-function read-only rules: regex `for` + fields (true=all or field names). Matching rules merge. */
     functionReadOnly?: { for: string; fields: true | string[] }[];
-    /** When non-null, authors are locked to this list (plan members). */
+    /** When non-null, authors are locked to this list of stable ids (member emails). */
     externalAuthors?: string[] | null;
+    /** Map of stable author id → display name. Missing entries fall back to the id. */
+    authorLabels?: Record<string, string>;
     ydoc?: Doc;
     useIndexedDB?: boolean;
     readonly?: boolean;
@@ -73,7 +76,7 @@ declare module 'function-planner-ui' {
   export interface InitHandle {
     model: Model;
     diagram: unknown;
-    setExternalAuthors(names: string[] | null): void;
+    setExternalAuthors(ids: string[] | null, labels?: Record<string, string>): void;
     destroy(): void;
   }
 

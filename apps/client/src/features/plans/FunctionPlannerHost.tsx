@@ -31,6 +31,9 @@ export function memberAuthorLabel(m: Pick<PlannerMember, 'firstName' | 'lastName
   return `${m.firstName} ${m.lastName}`.trim() || m.email;
 }
 
+/** Matches function-planner-ui `--group-N-color` / author-row cycling (5 colors). */
+const AUTHOR_GROUP_COUNT = 5;
+
 function memberInitials(m: PlannerMember): string {
   const a = (m.firstName || '').trim().charAt(0);
   const b = (m.lastName || '').trim().charAt(0);
@@ -57,6 +60,23 @@ function sortMembers(members: PlannerMember[], currentUserId: string | undefined
     const bn = `${b.firstName} ${b.lastName}`.trim().toLowerCase();
     return an.localeCompare(bn);
   });
+}
+
+/**
+ * Color index for a member's avatar: same ordering as Yjs authors (userId sort →
+ * email list), so it matches diagram groups / "By:" row colors even though the
+ * overlay itself is sorted by me/active/name.
+ */
+function authorGroupIndex(email: string, authorEmailsInSyncOrder: string[]): number {
+  const id = email.trim();
+  if (!id) {
+    return -1;
+  }
+  const index = authorEmailsInSyncOrder.indexOf(id);
+  if (index < 0) {
+    return -1;
+  }
+  return index % AUTHOR_GROUP_COUNT;
 }
 
 function statusDotClass(status: YjsCollabStatus): string {
@@ -139,10 +159,12 @@ export function FunctionPlannerHost({
             const isMe = m.userId === currentUserId;
             const name = memberAuthorLabel(m);
             const tip = `${name}${isMe ? ' (you)' : ''}${m.active ? ' · in planner' : ' · offline'}`;
+            const groupIndex = authorGroupIndex(m.email, externalAuthors ?? []);
+            const groupClass = groupIndex >= 0 ? ` app-planner-avatar--group-${groupIndex + 1}` : '';
             return (
               <li key={m.userId}>
                 <span
-                  className={`app-planner-avatar${m.active ? ' app-planner-avatar--active' : ''}`}
+                  className={`app-planner-avatar${groupClass}${m.active ? ' app-planner-avatar--active' : ''}`}
                   data-tip={tip}
                   aria-label={tip}
                 >

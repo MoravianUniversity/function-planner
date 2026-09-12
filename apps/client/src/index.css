@@ -746,6 +746,7 @@ body.app-planner-immersive > #root > div {
   border-radius: 50%;
   background: #a1a1aa;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 /* Immediate tips above status / members / view-mode (no native title delay) */
@@ -825,21 +826,39 @@ body.app-planner-immersive > #root > div {
   min-width: 0;
 }
 
+.app-planner-members > li {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+}
+
 .app-planner-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  box-sizing: border-box;
+  width: 1rem;
+  height: 1rem;
   border-radius: 50%;
-  font-size: 0.65rem;
+  font-size: 0.45rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   background: var(--app-avatar-bg);
   color: var(--app-avatar-text);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   opacity: 0.55;
+  line-height: 1;
+  flex-shrink: 0;
 }
+
+/* Same palette as function-planner-ui --group-N-color (author claim colors). */
+.app-planner-avatar--group-1 { background-color: #377eb840; }
+.app-planner-avatar--group-2 { background-color: #4daf4a40; }
+.app-planner-avatar--group-3 { background-color: #984ea340; }
+.app-planner-avatar--group-4 { background-color: #ff7f0040; }
+.app-planner-avatar--group-5 { background-color: #f781bf40; }
 
 .app-planner-avatar--active {
   opacity: 1;

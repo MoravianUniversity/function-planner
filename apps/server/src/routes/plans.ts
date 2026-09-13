@@ -6,9 +6,12 @@ import type {
   MyJoinRequestStatus,
   PlanEntryResponse,
   PendingJoinRequest,
+  PlannerModel,
   Role
 } from '@function-planner/shared';
 import {
+  comparePlans,
+  comparePythonSchema,
   createBasePlanSchema,
   importBasePlansSchema,
   mergeBaseIntoSolution,
@@ -16,6 +19,7 @@ import {
   parsePlanConfig,
   parsePlannerModel,
   planCheckOptionsFromConfig,
+  pythonCodeToModel,
   solutionMergeSchema,
   solutionPlanDocName,
   startStudentPlanSchema,
@@ -948,6 +952,110 @@ router.get(
         studentPlanId: studentPlan.id,
         email: user.email,
         problems
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/base/:basePlanId/compare-python',
+  requireCourseApiToken,
+  async (req, res, next) => {
+    try {
+      const { courseId } = res.locals.auth as { courseId: string };
+      const basePlanId = String(req.params.basePlanId);
+      const body = comparePythonSchema.parse(req.body);
+      const compareTo = body.compareTo;
+      const compare = body.compare.length > 0 ? body.compare : (['structural'] as const);
+
+      const basePlan = await prisma.basePlan.findFirst({
+        where: { courseId, id: basePlanId },
+        select: {
+          id: true,
+          content: true,
+          solutionContent: true,
+          solutionYjsState: true
+        }
+      });
+      if (!basePlan) {
+        return res.status(404).json({ message: 'Base plan not found.' });
+      }
+
+      let expected: PlannerModel | null = null;
+      let studentPlanId: string | undefined;
+      let email: string | undefined;
+
+      if (compareTo === 'student') {
+        email = body.email!.trim().toLowerCase();
+        const user = await prisma.user.findFirst({
+          where: { email: { equals: email, mode: 'insensitive' } }
+        });
+        if (!user) {
+          return res.status(404).json({ message: 'Member not found.' });
+        }
+        email = user.email;
+
+        const membership = await prisma.studentPlanMember.findFirst({
+          where: {
+            userId: user.id,
+            studentPlan: { courseId, basePlanId }
+          },
+          include: { studentPlan: true }
+        });
+        if (!membership) {
+          return res
+            .status(404)
+            .json({ message: 'No student plan membership for this member and base plan.' });
+        }
+
+        const studentPlan = membership.studentPlan;
+        studentPlanId = studentPlan.id;
+        const docName = studentPlanDocName(courseId, studentPlan.id);
+        const liveJson = getLivePlannerContentJson(docName);
+        const fromYjs =
+          liveJson ?? exportPlannerContentFromYjsState(studentPlan.yjsState ?? Buffer.alloc(0));
+        const contentJson = fromYjs ?? (studentPlan.content.trim() ? studentPlan.content : null);
+        expected = parsePlannerModel(contentJson);
+        if (!expected) {
+          return res.status(404).json({ message: 'Student plan model is empty or invalid.' });
+        }
+      } else if (compareTo === 'solution') {
+        const docName = solutionPlanDocName(courseId, basePlanId);
+        const liveJson = getLivePlannerContentJson(docName);
+        const fromYjs =
+          liveJson ??
+          exportPlannerContentFromYjsState(basePlan.solutionYjsState ?? Buffer.alloc(0));
+        const contentJson =
+          fromYjs ?? (basePlan.solutionContent.trim() ? basePlan.solutionContent : null);
+        expected = parsePlannerModel(contentJson);
+        if (!expected) {
+          return res.status(404).json({ message: 'Solution plan model is empty or invalid.' });
+        }
+      } else {
+        expected = parsePlannerModel(basePlan.content);
+        if (!expected) {
+          return res.status(404).json({ message: 'Base plan model is empty or invalid.' });
+        }
+      }
+
+      let actual: PlannerModel;
+      try {
+        actual = pythonCodeToModel(body.python, { tests: body.tests });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to parse Python source.';
+        return res.status(400).json({ message: `Invalid Python: ${message}` });
+      }
+
+      const report = comparePlans(expected, actual, { compare: [...compare] });
+
+      return res.json({
+        basePlanId,
+        compareTo,
+        ...(email ? { email } : {}),
+        ...(studentPlanId ? { studentPlanId } : {}),
+        ...report
       });
     } catch (error) {
       next(error);

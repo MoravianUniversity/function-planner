@@ -42,7 +42,7 @@ export function HomePage({ courseId }: { courseId: string }) {
           {data.studentView.myPlans.length > 0 ? (
             <>
               <h3>Your Plans</h3>
-              <ul className="app-plan-list">
+              <ul className="app-plan-list app-plan-list--student-actions">
                 {data.studentView.myPlans.map((plan) => {
                   const emails =
                     plan.members
@@ -62,7 +62,7 @@ export function HomePage({ courseId }: { courseId: string }) {
                         disabled={emails.length === 0}
                         title={
                           emails.length > 0
-                            ? 'Check Python against this plan'
+                            ? 'Compare Python code against this plan'
                             : 'No member email available'
                         }
                         onClick={() => {

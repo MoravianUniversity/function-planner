@@ -426,7 +426,7 @@ export function BasePlanManagePage({
                     disabled={emails.length === 0}
                     title={
                       emails.length > 0
-                        ? `Check Python against ${label}`
+                        ? `Compare Python code against ${label}`
                         : 'No member email available'
                     }
                     onClick={() => {

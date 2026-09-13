@@ -232,7 +232,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
       });
       if (compareEmails.length > 0) {
         group.push({
-          title: 'Check Python',
+          title: 'Compare Python code',
           icon: FILE_CODE_ICON,
           onClick: () => {
             setCompareOpen(true);

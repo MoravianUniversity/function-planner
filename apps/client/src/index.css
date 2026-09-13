@@ -382,18 +382,23 @@ textarea {
   margin: 1rem 0 0;
 }
 
-.app-student-home-plan-row {
-  display: flex;
-  flex-wrap: wrap;
+/* Plan title column = widest title; Check Python sits just to its right. */
+.app-plan-list--student-actions {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
   align-items: center;
-  gap: 0.35rem 0.75rem;
-  margin-bottom: 0.5rem;
+  width: max-content;
+  max-width: 100%;
+}
+
+.app-student-home-plan-row {
+  display: contents;
 }
 
 .app-student-home-plan-row .app-plan-row {
   margin-bottom: 0;
-  flex: 1 1 12rem;
-  min-width: 0;
 }
 
 .app-plan-row-link {

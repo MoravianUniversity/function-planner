@@ -3,6 +3,7 @@ import type { BasePlanSummary, CourseOption, StudentPlanSummary, Role } from '@f
 export interface HomeResponse {
   roles: Role[];
   readonly: boolean;
+  currentUserId: string;
   studentView: {
     myPlans: StudentPlanSummary[];
     availablePublishedPlans: BasePlanSummary[];

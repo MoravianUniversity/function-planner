@@ -30,7 +30,7 @@ export interface StudentPlanSummary {
   title: string;
   readonly: boolean;
   /** Present on student home "Your Plans" rows. */
-  members?: { firstName: string; lastName: string; email: string }[];
+  members?: { userId: string; firstName: string; lastName: string; email: string }[];
 }
 
 /** Result of GET /api/plans/entry/:identifier — how to render /plans/:identifier for the current user. */

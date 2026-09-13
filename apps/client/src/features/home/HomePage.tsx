@@ -48,6 +48,22 @@ export function HomePage({ courseId }: { courseId: string }) {
                     plan.members
                       ?.map((m) => m.email?.trim() ?? '')
                       .filter((value) => value.length > 0) ?? [];
+                  const others =
+                    plan.members
+                      ?.filter((m) => m.userId !== data.currentUserId)
+                      .map((m) => {
+                        const name = `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim();
+                        return name || m.email;
+                      })
+                      .filter(Boolean) ?? [];
+                  const withLabel =
+                    others.length === 0
+                      ? null
+                      : others.length === 1
+                        ? `with ${others[0]}`
+                        : others.length === 2
+                          ? `with ${others[0]} and ${others[1]}`
+                          : `with ${others.slice(0, -1).join(', ')}, and ${others[others.length - 1]}`;
                   return (
                     <li key={plan.id} className="app-student-home-plan-row">
                       <Link
@@ -55,6 +71,7 @@ export function HomePage({ courseId }: { courseId: string }) {
                         to={`/plans/${plan.basePlanId}`}
                       >
                         <span className="app-plan-title">{plan.title}</span>
+                        {withLabel ? <span className="app-plan-with">{withLabel}</span> : null}
                       </Link>
                       <button
                         type="button"

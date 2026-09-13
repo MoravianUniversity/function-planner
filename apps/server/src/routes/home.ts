@@ -41,7 +41,7 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
       id: string;
       basePlanId: string;
       basePlan: { title: string };
-      members?: { user: { firstName: string; lastName: string; email: string } }[];
+      members?: { userId: string; user: { firstName: string; lastName: string; email: string } }[];
     }) => ({
       id: sp.id,
       basePlanId: sp.basePlanId,
@@ -50,6 +50,7 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
       ...(sp.members
         ? {
             members: sp.members.map((m) => ({
+              userId: m.userId,
               firstName: m.user.firstName,
               lastName: m.user.lastName,
               email: m.user.email
@@ -61,6 +62,7 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
     res.json({
       roles,
       readonly: isCourseReadonly(course.endsAt),
+      currentUserId: user.id,
       studentView: {
         myPlans: myStudentPlans.map(mapStudentPlan),
         availablePublishedPlans: unstartedPublishedPlans

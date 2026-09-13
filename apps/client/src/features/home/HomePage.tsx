@@ -5,12 +5,18 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFileImport, faPlus } from '@fortawesome/free-solid-svg-icons';
 import { apiGet } from '../../api/client';
 import type { HomeResponse } from '../../types/api';
+import { ComparePythonDialog } from '../plans/ComparePythonDialog';
 import { CreatePlanDialog } from './CreatePlanDialog';
 import { ImportPlansDialog } from './ImportPlansDialog';
 
 export function HomePage({ courseId }: { courseId: string }) {
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
   const [importPlansOpen, setImportPlansOpen] = useState(false);
+  const [compareTarget, setCompareTarget] = useState<{
+    basePlanId: string;
+    emails: string[];
+    label: string;
+  } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['home', courseId],
@@ -37,13 +43,43 @@ export function HomePage({ courseId }: { courseId: string }) {
             <>
               <h3>Your Plans</h3>
               <ul className="app-plan-list">
-                {data.studentView.myPlans.map((plan) => (
-                  <li key={plan.id}>
-                    <Link className="app-plan-row app-plan-row-link" to={`/plans/${plan.basePlanId}`}>
-                      <span className="app-plan-title">{plan.title}</span>
-                    </Link>
-                  </li>
-                ))}
+                {data.studentView.myPlans.map((plan) => {
+                  const emails =
+                    plan.members
+                      ?.map((m) => m.email?.trim() ?? '')
+                      .filter((value) => value.length > 0) ?? [];
+                  return (
+                    <li key={plan.id} className="app-student-home-plan-row">
+                      <Link
+                        className="app-plan-row app-plan-row-link"
+                        to={`/plans/${plan.basePlanId}`}
+                      >
+                        <span className="app-plan-title">{plan.title}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        className="app-btn"
+                        disabled={emails.length === 0}
+                        title={
+                          emails.length > 0
+                            ? 'Check Python against this plan'
+                            : 'No member email available'
+                        }
+                        onClick={() => {
+                          if (emails.length > 0) {
+                            setCompareTarget({
+                              basePlanId: plan.basePlanId,
+                              emails,
+                              label: plan.title
+                            });
+                          }
+                        }}
+                      >
+                        Check against Python
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           ) : null}
@@ -104,6 +140,21 @@ export function HomePage({ courseId }: { courseId: string }) {
           </ul>
           {data.staffView.basePlans.length === 0 ? <p className="app-muted">No plans yet.</p> : null}
         </>
+      ) : null}
+
+      {compareTarget ? (
+        <ComparePythonDialog
+          courseId={courseId}
+          basePlanId={compareTarget.basePlanId}
+          emails={compareTarget.emails}
+          memberLabel={compareTarget.label}
+          open={Boolean(compareTarget)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCompareTarget(null);
+            }
+          }}
+        />
       ) : null}
     </div>
   );

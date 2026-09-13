@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { apiGet, apiSend, ApiHttpError } from '../../api/client';
 import type { CoursesResponse } from '../../types/api';
 import { AppDialog } from '../../components/ui/AppDialog';
+import { ComparePythonDialog } from './ComparePythonDialog';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
 import type { PlannerExtraFab } from './useFunctionPlanner';
 
@@ -27,6 +28,10 @@ const LEAVE_ICON =
 /** Font Awesome Free list (solid) — staff back to base-plan student list. */
 const LIST_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M40 48C26.7 48 16 58.7 16 72v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V72c0-13.3-10.7-24-24-24H40zM192 64c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zM16 232v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V232c0-13.3-10.7-24-24-24H40c-13.3 0-24 10.7-24 24zM40 368c-13.3 0-24 10.7-24 24v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V392c0-13.3-10.7-24-24-24H40z"/></svg>';
+
+/** Font Awesome Free file-code (solid) — staff compare Python. */
+const FILE_CODE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512" aria-hidden="true"><path fill="currentColor" d="M64 0C28.7 0 0 28.7 0 64L0 448c0 35.3 28.7 64 64 64l256 0c35.3 0 64-28.7 64-64l0-288-128 0c-17.7 0-32-14.3-32-32L224 0 64 0zM256 0l0 128 128 0L256 0zM153 289l-39 39 39 39c9.4 9.4 9.4 24.6 0 33.9s-24.6 9.4-33.9 0L63 345c-9.4-9.4-9.4-24.6 0-33.9l56-56c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9zm78 33.9c-9.4-9.4-9.4-24.6 0-33.9l56-56c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9l-56 56c-9.4 9.4-24.6 9.4-33.9 0z"/></svg>';
 
 interface CollabTicketResponse {
   ticket: string;
@@ -61,6 +66,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     document.body.classList.add('app-planner-immersive');
@@ -193,6 +199,10 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
 
   const isMember = Boolean(plan?.isMember);
   const basePlanId = plan?.basePlanId;
+  const compareEmails =
+    plan?.members.map((m) => m.email?.trim() ?? '').filter((value) => value.length > 0) ?? [];
+  const compareLabel = memberLabelFromPlanMembers(plan?.members ?? []);
+  const isStaffViewer = Boolean(plan && !plan.isMember);
   const extraFabs = useMemo((): PlannerExtraFab[][] => {
     const group: PlannerExtraFab[] = [
       {
@@ -220,9 +230,18 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
           navigate(`/plans/${basePlanId}`);
         }
       });
+      if (compareEmails.length > 0) {
+        group.push({
+          title: 'Check Python',
+          icon: FILE_CODE_ICON,
+          onClick: () => {
+            setCompareOpen(true);
+          }
+        });
+      }
     }
     return [group];
-  }, [isMember, basePlanId, courseReadonly, leaveMutation.isPending, navigate]);
+  }, [isMember, basePlanId, compareEmails.length, courseReadonly, leaveMutation.isPending, navigate]);
 
   const isLastMember = (plan?.members.length ?? 0) <= 1;
   const pendingRequest = joinRequests?.requests[0];
@@ -367,6 +386,35 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
           </button>
         </div>
       </AppDialog>
+
+      {isStaffViewer && basePlanId && compareEmails.length > 0 ? (
+        <ComparePythonDialog
+          courseId={courseId}
+          basePlanId={basePlanId}
+          emails={compareEmails}
+          memberLabel={compareLabel}
+          open={compareOpen}
+          onOpenChange={setCompareOpen}
+        />
+      ) : null}
     </>
   );
+}
+
+function memberLabelFromPlanMembers(
+  members: { firstName?: string | null; lastName?: string | null; email?: string | null }[]
+): string {
+  const names = members
+    .map((u) => {
+      const name = `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim();
+      return name.length ? name : (u.email ?? 'Unknown');
+    })
+    .filter(Boolean);
+  if (names.length === 0) {
+    return 'this plan';
+  }
+  if (names.length <= 3) {
+    return names.join(', ');
+  }
+  return `${names.slice(0, 3).join(', ')} +${names.length - 3}`;
 }

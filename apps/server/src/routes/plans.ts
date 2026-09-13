@@ -28,7 +28,7 @@ import {
   updateBasePlanSchema
 } from '@function-planner/shared';
 import { loadCourseContext, requireAuth, requireRole } from '../middleware/auth.js';
-import { requireCourseApiToken } from '../middleware/apiToken.js';
+import { requireCourseApiToken, requireCourseApiTokenOrStaff } from '../middleware/apiToken.js';
 import { rejectReadonlyCourseWrites } from '../middleware/readonly.js';
 import { prisma } from '../lib/prisma.js';
 import { getActiveStudentUserIds, hasActiveStudentMember } from '../collab/presence.js';
@@ -961,14 +961,25 @@ router.get(
 
 router.post(
   '/base/:basePlanId/compare-python',
-  requireCourseApiToken,
+  requireCourseApiTokenOrStaff,
   async (req, res, next) => {
     try {
-      const { courseId } = res.locals.auth as { courseId: string };
+      const auth = res.locals.auth as {
+        courseId: string;
+        roles?: Role[];
+        user?: { id: string };
+      };
+      const { courseId } = auth;
+      const sessionUserId = auth.user?.id;
+      const isStaff = Boolean(auth.roles?.some((r) => r === 'TA' || r === 'INSTRUCTOR'));
       const basePlanId = String(req.params.basePlanId);
       const body = comparePythonSchema.parse(req.body);
       const compareTo = body.compareTo;
       const compare = body.compare.length > 0 ? body.compare : (['structural'] as const);
+
+      if (sessionUserId && !isStaff && compareTo !== 'student') {
+        return res.status(403).json({ message: 'Students can only compare against their own plan.' });
+      }
 
       const basePlan = await prisma.basePlan.findFirst({
         where: { courseId, id: basePlanId },
@@ -988,18 +999,33 @@ router.post(
       let email: string | undefined;
 
       if (compareTo === 'student') {
-        email = body.email!.trim().toLowerCase();
-        const user = await prisma.user.findFirst({
-          where: { email: { equals: email, mode: 'insensitive' } }
-        });
-        if (!user) {
-          return res.status(404).json({ message: 'Member not found.' });
+        // Students always resolve via their own membership; staff/API use body.email.
+        let memberUserId: string;
+        if (sessionUserId && !isStaff) {
+          memberUserId = sessionUserId;
+          const selfUser = await prisma.user.findUnique({
+            where: { id: sessionUserId },
+            select: { email: true }
+          });
+          email = selfUser?.email;
+        } else {
+          const lookupEmail = body.email?.trim().toLowerCase();
+          if (!lookupEmail) {
+            return res.status(400).json({ message: 'email is required when compareTo is "student".' });
+          }
+          const user = await prisma.user.findFirst({
+            where: { email: { equals: lookupEmail, mode: 'insensitive' } }
+          });
+          if (!user) {
+            return res.status(404).json({ message: 'Member not found.' });
+          }
+          memberUserId = user.id;
+          email = user.email;
         }
-        email = user.email;
 
         const membership = await prisma.studentPlanMember.findFirst({
           where: {
-            userId: user.id,
+            userId: memberUserId,
             studentPlan: { courseId, basePlanId }
           },
           include: { studentPlan: true }

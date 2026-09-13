@@ -102,23 +102,10 @@ export const compareCategorySchema = z.enum(['structural', 'types', 'docs', 'cod
 
 export const compareToSchema = z.enum(['student', 'solution', 'base']);
 
-export const comparePythonSchema = z
-  .object({
-    python: z.string().min(1),
-    tests: z.string().optional().default(''),
-    compareTo: compareToSchema.default('student'),
-    email: z.string().optional(),
-    compare: z.array(compareCategorySchema).default(['structural'])
-  })
-  .superRefine((value, ctx) => {
-    if (value.compareTo === 'student') {
-      const email = value.email?.trim();
-      if (!email) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['email'],
-          message: 'email is required when compareTo is "student".'
-        });
-      }
-    }
-  });
+export const comparePythonSchema = z.object({
+  python: z.string().min(1),
+  tests: z.string().optional().default(''),
+  compareTo: compareToSchema.default('student'),
+  email: z.string().optional(),
+  compare: z.array(compareCategorySchema).default(['structural'])
+});

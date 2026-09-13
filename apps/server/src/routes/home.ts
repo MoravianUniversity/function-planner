@@ -14,7 +14,10 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
       prisma.basePlan.findMany({ where: { courseId }, orderBy: { updatedAt: 'desc' } }),
       prisma.studentPlan.findMany({
         where: { courseId, members: { some: { userId: user.id } } },
-        include: { basePlan: { select: { title: true } } },
+        include: {
+          basePlan: { select: { title: true } },
+          members: { include: { user: { select: { firstName: true, lastName: true, email: true } } } }
+        },
         orderBy: { updatedAt: 'desc' }
       }),
       prisma.studentPlan.findMany({
@@ -39,12 +42,22 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
       basePlanId: string;
       state: string;
       basePlan: { title: string };
+      members?: { user: { firstName: string; lastName: string; email: string } }[];
     }) => ({
       id: sp.id,
       basePlanId: sp.basePlanId,
       title: sp.basePlan.title,
       state: sp.state,
-      readonly: isCourseReadonly(course.endsAt)
+      readonly: isCourseReadonly(course.endsAt),
+      ...(sp.members
+        ? {
+            members: sp.members.map((m) => ({
+              firstName: m.user.firstName,
+              lastName: m.user.lastName,
+              email: m.user.email
+            }))
+          }
+        : {})
     });
 
     res.json({

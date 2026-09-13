@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifyCourseApiJwt } from '../auth/apiJwt.js';
+import { loadCourseContext, requireAuth, requireRole } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 
 /**
@@ -51,4 +52,33 @@ export const requireCourseApiToken = async (
   } catch (error) {
     next(error);
   }
+};
+
+/**
+ * Bearer course API JWT, or session cookie for any enrolled course role
+ * (STUDENT / TA / INSTRUCTOR; requires `courseId` query).
+ * Handler must enforce student-only restrictions (own plan).
+ */
+export const requireCourseApiTokenOrStaff = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    void requireCourseApiToken(req, res, next);
+    return;
+  }
+  requireAuth(req, res, (authErr?: unknown) => {
+    if (authErr) {
+      next(authErr);
+      return;
+    }
+    void loadCourseContext(req, res, (ctxErr?: unknown) => {
+      if (ctxErr) {
+        next(ctxErr);
+        return;
+      }
+      requireRole('STUDENT', 'TA', 'INSTRUCTOR')(req, res, next);
+    });
+  });
 };

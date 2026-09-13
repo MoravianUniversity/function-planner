@@ -30,6 +30,8 @@ export interface StudentPlanSummary {
   title: string;
   state: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
   readonly: boolean;
+  /** Present on student home "Your Plans" rows. */
+  members?: { firstName: string; lastName: string; email: string }[];
 }
 
 /** Result of GET /api/plans/entry/:identifier — how to render /plans/:identifier for the current user. */

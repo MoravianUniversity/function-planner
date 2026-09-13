@@ -19,6 +19,7 @@ import {
 } from '@function-planner/shared';
 import { apiGet, apiSend } from '../../api/client';
 import type { BasePlanDetail, CoursesResponse, StaffStudentPlanRow } from '../../types/api';
+import { ComparePythonDialog } from './ComparePythonDialog';
 
 const BASE_PLAN_CONFIG_TOAST_ID = 'base-plan-config-save';
 const BASE_PLAN_PUBLISH_TOAST_ID = 'base-plan-publish';
@@ -129,6 +130,10 @@ export function BasePlanManagePage({
   const [copyState, setCopyState] = useState<'idle' | 'success' | 'error'>('idle');
   const copyResetTimeoutRef = useRef<number | null>(null);
   const configWasExpandedRef = useRef(false);
+  const [compareTarget, setCompareTarget] = useState<{
+    emails: string[];
+    label: string;
+  } | null>(null);
 
   const { data: coursesData } = useQuery({
     queryKey: ['courses'],
@@ -389,6 +394,56 @@ export function BasePlanManagePage({
             : 'Create Solution'}
         </Link>
       </div>
+
+      <section className="app-manage-plan-section">
+        <h3>Student Plans</h3>
+        {!basePlan.published ? (
+          <p className="app-muted">Publish this plan before students can start submissions.</p>
+        ) : null}
+        {instancesLoading ? (
+          <p>Loading…</p>
+        ) : instances.length === 0 ? (
+          <p className="app-muted">
+            {basePlan.published
+              ? 'No student or group submissions for this plan yet.'
+              : 'No student plans yet.'}
+          </p>
+        ) : (
+          <ul className="app-student-instance-list">
+            {instances.map((row) => {
+              const label = memberLabel(row.members);
+              const emails = row.members
+                .map((m) => m.user?.email?.trim() ?? '')
+                .filter((value) => value.length > 0);
+              return (
+                <li key={row.id} className="app-student-instance-row">
+                  <div className="app-student-instance-main">
+                    <Link to={`/plans/${row.id}`}>{label}</Link>
+                    <span className="app-instance-meta"> · {prettyState(row.state)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="app-btn"
+                    disabled={emails.length === 0}
+                    title={
+                      emails.length > 0
+                        ? `Check Python against ${label}`
+                        : 'No member email available'
+                    }
+                    onClick={() => {
+                      if (emails.length > 0) {
+                        setCompareTarget({ emails, label });
+                      }
+                    }}
+                  >
+                    Check against Python
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section
         className={`app-manage-plan-section app-config-collapse ${configExpanded ? 'app-config-collapse--open' : ''}`}
@@ -830,26 +885,19 @@ export function BasePlanManagePage({
         </div>
       </section>
 
-      {basePlan.published ? (
-        <section className="app-manage-plan-section">
-          <h3>Student Plans</h3>
-          {instancesLoading ? (
-            <p>Loading…</p>
-          ) : instances.length === 0 ? (
-            <p className="app-muted">No student or group submissions for this plan yet.</p>
-          ) : (
-            <ul className="app-student-instance-list">
-              {instances.map((row) => (
-                <li key={row.id} className="app-student-instance-row">
-                  <div>
-                    <Link to={`/plans/${row.id}`}>{memberLabel(row.members)}</Link>
-                    <span className="app-instance-meta"> · {prettyState(row.state)}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      {compareTarget ? (
+        <ComparePythonDialog
+          courseId={courseId}
+          basePlanId={basePlanId}
+          emails={compareTarget.emails}
+          memberLabel={compareTarget.label}
+          open={Boolean(compareTarget)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCompareTarget(null);
+            }
+          }}
+        />
       ) : null}
     </div>
   );

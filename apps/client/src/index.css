@@ -382,6 +382,20 @@ textarea {
   margin: 1rem 0 0;
 }
 
+.app-student-home-plan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.app-student-home-plan-row .app-plan-row {
+  margin-bottom: 0;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 .app-plan-row-link {
   text-decoration: none;
   color: inherit;
@@ -633,7 +647,82 @@ textarea {
 }
 
 .app-student-instance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
   padding: 0.35rem 0;
+}
+
+.app-student-instance-main {
+  min-width: 0;
+}
+
+.app-btn-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: var(--app-primary, #2563eb) !important;
+  text-decoration: underline !important;
+  font-size: 0.9rem;
+}
+
+.app-btn-link:hover {
+  background: transparent;
+  border: none;
+  color: var(--app-primary-hover, #1d4ed8) !important;
+}
+
+.app-form-error {
+  color: var(--app-danger, #b91c1c);
+  margin: 0.5rem 0 0;
+}
+
+.app-compare-python-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.app-compare-python-emails {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  font-size: 0.9rem;
+  color: var(--app-text-muted, #6b7280);
+}
+
+.app-compare-python-emails li {
+  margin: 0.1rem 0;
+}
+
+.app-compare-python-file {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+}
+
+.app-compare-python-report {
+  margin: 0.75rem 0 0;
+  max-height: min(40vh, 20rem);
+  overflow: auto;
+}
+
+.app-compare-python-diffs {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.app-compare-python-diff-cat {
+  display: inline-block;
+  min-width: 4.5rem;
+  margin-right: 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: var(--app-text-muted, #6b7280);
 }
 
 .app-instance-meta {

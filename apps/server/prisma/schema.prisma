@@ -38,15 +38,17 @@ model User {
 }
 
 model Course {
-  id          String       @id @default(cuid())
-  name        String
-  term        String
-  startsAt    DateTime
-  endsAt      DateTime
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  enrollments Enrollment[]
-  basePlans   BasePlan[]
+  id           String       @id @default(cuid())
+  name         String
+  term         String
+  startsAt     DateTime
+  endsAt       DateTime
+  apiTokenSub  String?
+  apiTokenIat  Int?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  enrollments  Enrollment[]
+  basePlans    BasePlan[]
   studentPlans StudentPlan[]
 
   @@index([startsAt])

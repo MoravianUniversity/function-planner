@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createCourseSchema, updateCourseSchema } from '@function-planner/shared';
-import { requireAuth } from '../middleware/auth.js';
+import { mintCourseApiJwt } from '../auth/apiJwt.js';
+import { requireAuth, loadCourseContext, requireRole } from '../middleware/auth.js';
 import { listCoursesForUser } from '../services/courseService.js';
 import { prisma } from '../lib/prisma.js';
 
@@ -18,6 +19,74 @@ router.get('/', requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+
+router.get(
+  '/:courseId/api-token',
+  requireAuth,
+  loadCourseContext,
+  requireRole('INSTRUCTOR'),
+  async (req, res, next) => {
+    try {
+      const courseId = String(req.params.courseId);
+      const reveal = String(req.query.reveal ?? '') === '1';
+      const course = await prisma.course.findUnique({
+        where: { id: courseId },
+        select: { apiTokenSub: true, apiTokenIat: true }
+      });
+      if (!course) {
+        return res.status(404).json({ message: 'Course not found.' });
+      }
+
+      const exists = course.apiTokenIat != null && course.apiTokenSub != null;
+      if (!exists) {
+        return res.json({ exists: false, sub: null, iat: null, token: null });
+      }
+
+      let token: string | null = null;
+      if (reveal) {
+        token = await mintCourseApiJwt({
+          sub: course.apiTokenSub!,
+          course: courseId,
+          iat: course.apiTokenIat!
+        });
+      }
+
+      return res.json({
+        exists: true,
+        sub: course.apiTokenSub,
+        iat: course.apiTokenIat,
+        token
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  '/:courseId/api-token',
+  requireAuth,
+  loadCourseContext,
+  requireRole('INSTRUCTOR'),
+  async (req, res, next) => {
+    try {
+      const courseId = String(req.params.courseId);
+      const user = req.user as { id: string; email: string };
+      const sub = user.email;
+      const iat = Math.floor(Date.now() / 1000);
+
+      await prisma.course.update({
+        where: { id: courseId },
+        data: { apiTokenSub: sub, apiTokenIat: iat }
+      });
+
+      const token = await mintCourseApiJwt({ sub, course: courseId, iat });
+      return res.status(201).json({ exists: true, sub, iat, token });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 router.get('/:courseId', requireAuth, async (req, res, next) => {
   try {

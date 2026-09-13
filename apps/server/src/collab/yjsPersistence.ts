@@ -16,6 +16,7 @@ const yWebsocketUtils = require('y-websocket/bin/utils') as {
   docs: Map<string, YjsDoc & { destroy: () => void; name: string }>;
 };
 const Y = require('yjs') as {
+  Doc: new () => YjsDoc;
   applyUpdate: (doc: YjsDoc, update: Uint8Array) => void;
   encodeStateAsUpdate: (doc: YjsDoc) => Uint8Array;
 };
@@ -43,7 +44,7 @@ function plannerMapsNonEmpty(doc: YjsDoc): boolean {
 }
 
 /** Serialize planner Y.Maps to the JSON shape used for base-plan seed `content`. */
-function exportPlannerContent(doc: YjsDoc): string {
+export function exportPlannerContent(doc: YjsDoc): string {
   const modelData = doc.getMap('modelData').toJSON();
   const out: Record<string, unknown> = { ...modelData };
   delete out.functions;
@@ -58,6 +59,28 @@ function exportPlannerContent(doc: YjsDoc): string {
     return { from, to };
   });
   return JSON.stringify(out);
+}
+
+/** Live in-memory doc content for a full doc name (`yjs/...`), if present and non-empty. */
+export function getLivePlannerContentJson(docName: string): string | null {
+  const doc = docs.get(docName);
+  if (!doc || !plannerMapsNonEmpty(doc)) {
+    return null;
+  }
+  return exportPlannerContent(doc);
+}
+
+/** Build planner JSON from a persisted yjsState blob. */
+export function exportPlannerContentFromYjsState(yjsState: Uint8Array | Buffer): string | null {
+  if (!yjsState || yjsState.length === 0) {
+    return null;
+  }
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, yjsState instanceof Buffer ? new Uint8Array(yjsState) : yjsState);
+  if (!plannerMapsNonEmpty(doc)) {
+    return null;
+  }
+  return exportPlannerContent(doc);
 }
 
 /**

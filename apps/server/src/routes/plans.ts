@@ -12,8 +12,10 @@ import {
   createBasePlanSchema,
   importBasePlansSchema,
   mergeBaseIntoSolution,
+  checkPlan,
   parsePlanConfig,
   parsePlannerModel,
+  planCheckOptionsFromConfig,
   solutionMergeSchema,
   solutionPlanDocName,
   startStudentPlanSchema,
@@ -22,10 +24,15 @@ import {
   updateBasePlanSchema
 } from '@function-planner/shared';
 import { loadCourseContext, requireAuth, requireRole } from '../middleware/auth.js';
+import { requireCourseApiToken } from '../middleware/apiToken.js';
 import { rejectReadonlyCourseWrites } from '../middleware/readonly.js';
 import { prisma } from '../lib/prisma.js';
 import { getActiveStudentUserIds, hasActiveStudentMember } from '../collab/presence.js';
-import { evictYjsDoc } from '../collab/yjsPersistence.js';
+import {
+  evictYjsDoc,
+  exportPlannerContentFromYjsState,
+  getLivePlannerContentJson
+} from '../collab/yjsPersistence.js';
 
 const router = Router();
 
@@ -876,6 +883,77 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
     next(error);
   }
 });
+
+router.get(
+  '/base/:basePlanId/members/:email/problems',
+  requireCourseApiToken,
+  async (req, res, next) => {
+    try {
+      const { courseId } = res.locals.auth as { courseId: string };
+      const basePlanId = String(req.params.basePlanId);
+      const email = decodeURIComponent(String(req.params.email)).trim().toLowerCase();
+
+      const basePlan = await prisma.basePlan.findFirst({
+        where: { courseId, id: basePlanId },
+        select: { id: true, settings: true }
+      });
+      if (!basePlan) {
+        return res.status(404).json({ message: 'Base plan not found.' });
+      }
+
+      const user = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } }
+      });
+      if (!user) {
+        return res.status(404).json({ message: 'Member not found.' });
+      }
+
+      const membership = await prisma.studentPlanMember.findFirst({
+        where: {
+          userId: user.id,
+          studentPlan: { courseId, basePlanId }
+        },
+        include: {
+          studentPlan: {
+            include: {
+              members: { include: { user: { select: { id: true, email: true } } } }
+            }
+          }
+        }
+      });
+      if (!membership) {
+        return res.status(404).json({ message: 'No student plan membership for this member and base plan.' });
+      }
+
+      const studentPlan = membership.studentPlan;
+      const docName = studentPlanDocName(courseId, studentPlan.id);
+      const liveJson = getLivePlannerContentJson(docName);
+      const fromYjs = liveJson ?? exportPlannerContentFromYjsState(studentPlan.yjsState ?? Buffer.alloc(0));
+      const contentJson = fromYjs ?? (studentPlan.content.trim() ? studentPlan.content : null);
+      const model = parsePlannerModel(contentJson);
+      if (!model) {
+        return res.status(404).json({ message: 'Plan model is empty or invalid.' });
+      }
+
+      const config = parsePlanConfig(basePlan.settings);
+      const externalAuthors = studentPlan.members.map((m) => m.user.id);
+      const options = planCheckOptionsFromConfig(config, {
+        adminMode: false,
+        externalAuthors
+      });
+      const problems = checkPlan(model, options);
+
+      return res.json({
+        basePlanId,
+        studentPlanId: studentPlan.id,
+        email: user.email,
+        problems
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 export default router;
 

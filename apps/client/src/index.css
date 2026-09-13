@@ -335,6 +335,47 @@ textarea {
   li .app-btn { margin-right: 0.5rem; }
 }
 
+.app-api-token {
+  margin: 1rem 0 2rem;
+}
+
+.app-api-token-value {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--app-btn-hover-bg);
+  border: 1px solid var(--app-border);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.app-api-token-value .app-btn {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.app-api-token-value pre {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  max-width: min(40rem, calc(100vw - 8rem));
+}
+
+.app-muted {
+  color: var(--app-muted, #6b7280);
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
 .app-plan-list {
   list-style: none;
   padding: 0;

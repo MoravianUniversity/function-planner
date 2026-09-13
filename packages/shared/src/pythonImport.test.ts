@@ -59,6 +59,36 @@ def greet():
     expect(byName.greet?.io).toBe('output');
   });
 
+  it('keeps # Calls and IO markers on trivial stub bodies (export roundtrip)', () => {
+    const model = pythonCodeToModel(`
+def helper(x: int) -> int:
+    # TODO: implement this function
+    return 0
+
+def main() -> None:
+    # TODO: implement this function
+    # Calls helper()
+    # Has direct user output
+    pass
+
+if __name__ == "__main__":
+    main()
+`);
+    expect(model.calls).toEqual([{ from: '1', to: '0' }]);
+    expect(model.functions[1].io).toBe('output');
+  });
+
+  it('records Attribute callees when the attr matches a top-level function', () => {
+    const model = pythonCodeToModel(`
+def helper():
+    return 1
+
+def main():
+    return mod.helper()
+`);
+    expect(model.calls).toEqual([{ from: '1', to: '0' }]);
+  });
+
   it('parses Google-style docstrings for params', () => {
     const model = pythonCodeToModel(`
 def add(a, b):
@@ -78,5 +108,70 @@ def add(a, b):
       expect.objectContaining({ name: 'b', type: 'int', desc: 'second' })
     ]);
     expect(fn.returns).toEqual([expect.objectContaining({ type: 'int', desc: 'sum' })]);
+  });
+
+  it('keeps NumPy return descriptions (default export style)', () => {
+    const model = pythonCodeToModel(`
+def helper(x: int) -> int:
+    """Double x.
+
+    Parameters
+    ----------
+    x : int
+        value to double
+
+    Returns
+    -------
+    int
+        doubled value
+    """
+    return 0
+`);
+    expect(model.functions[0].params).toEqual([
+      expect.objectContaining({ name: 'x', type: 'int', desc: 'value to double' })
+    ]);
+    expect(model.functions[0].returns).toEqual([
+      expect.objectContaining({ type: 'int', desc: 'doubled value' })
+    ]);
+  });
+
+  it('keeps NumPy descriptions for each tuple return', () => {
+    const model = pythonCodeToModel(`
+def split(s: str) -> tuple[str, str]:
+    """Split.
+
+    Returns
+    -------
+    str
+        left half
+    str
+        right half
+    """
+    return s, s
+`);
+    expect(model.functions[0].returns).toEqual([
+      expect.objectContaining({ type: 'str', desc: 'left half' }),
+      expect.objectContaining({ type: 'str', desc: 'right half' })
+    ]);
+  });
+
+  it('merges Sphinx :return: and :rtype: (and param/type)', () => {
+    const model = pythonCodeToModel(`
+def helper(x):
+    """Double x.
+
+    :param x: value to double
+    :type x: int
+    :return: doubled value
+    :rtype: int
+    """
+    return x * 2
+`);
+    expect(model.functions[0].params).toEqual([
+      expect.objectContaining({ name: 'x', type: 'int', desc: 'value to double' })
+    ]);
+    expect(model.functions[0].returns).toEqual([
+      expect.objectContaining({ type: 'int', desc: 'doubled value' })
+    ]);
   });
 });

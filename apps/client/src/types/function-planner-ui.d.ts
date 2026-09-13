@@ -48,6 +48,9 @@ declare module 'function-planner-ui' {
     adminMode?: boolean;
     callGraphOnly?: boolean;
     showSaveJSON?: boolean;
+    showImportPython?: boolean;
+    /** Host-injected Python → planner model converter; required for Import from Python. */
+    pythonCodeToModel?: (code: string, opts?: { tests?: string }) => object;
     showLoadJSON?: boolean;
     showTestDocumentation?: boolean;
     showGlobalCode?: boolean;

@@ -118,6 +118,7 @@ export function BasePlanManagePage({
   const [canClaimFuncs, setCanClaimFuncs] = useState(DEFAULT_PLAN_CONFIG.canClaimFuncs);
   const [callGraphOnly, setCallGraphOnly] = useState(DEFAULT_PLAN_CONFIG.callGraphOnly);
   const [showSaveJSON, setShowSaveJSON] = useState(DEFAULT_PLAN_CONFIG.showSaveJSON);
+  const [showImportPython, setShowImportPython] = useState(DEFAULT_PLAN_CONFIG.showImportPython);
   const [showTestDocumentation, setShowTestDocumentation] = useState(DEFAULT_PLAN_CONFIG.showTestDocumentation);
   const [showGlobalCode, setShowGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showGlobalCode);
   const [showTestGlobalCode, setShowTestGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showTestGlobalCode);
@@ -177,6 +178,7 @@ export function BasePlanManagePage({
     setCanClaimFuncs(config.canClaimFuncs);
     setCallGraphOnly(config.callGraphOnly);
     setShowSaveJSON(config.showSaveJSON);
+    setShowImportPython(config.showImportPython);
     setShowTestDocumentation(config.showTestDocumentation);
     setShowGlobalCode(config.showGlobalCode);
     setShowTestGlobalCode(config.showTestGlobalCode);
@@ -219,6 +221,7 @@ export function BasePlanManagePage({
         canClaimFuncs,
         callGraphOnly,
         showSaveJSON,
+        showImportPython,
         showTestDocumentation,
         showGlobalCode,
         showTestGlobalCode,
@@ -253,6 +256,7 @@ export function BasePlanManagePage({
         canClaimFuncs: s.canClaimFuncs,
         callGraphOnly: s.callGraphOnly,
         showSaveJSON: s.showSaveJSON,
+        showImportPython: s.showImportPython,
         showTestDocumentation: s.showTestDocumentation,
         showGlobalCode: s.showGlobalCode,
         showTestGlobalCode: s.showTestGlobalCode,
@@ -462,6 +466,7 @@ export function BasePlanManagePage({
             <p><strong>Functions can be claimed:</strong> {canClaimFuncs ? 'Yes' : 'No'}</p>
             <p><strong>Call graph only mode:</strong> {callGraphOnly ? 'Yes' : 'No'}</p>
             <p><strong>Show Save as JSON:</strong> {showSaveJSON ? 'Yes' : 'No'}</p>
+            <p><strong>Show Import from Python:</strong> {showImportPython ? 'Yes' : 'No'}</p>
             <p><strong>Show test documentation:</strong> {showTestDocumentation ? 'Yes' : 'No'}</p>
             <p><strong>Show global code:</strong> {showGlobalCode ? 'Yes' : 'No'}</p>
             <p><strong>Show test global code:</strong> {showTestGlobalCode ? 'Yes' : 'No'}</p>
@@ -621,6 +626,18 @@ export function BasePlanManagePage({
                   }}
                 />
                 <ConfigFieldTitle fieldKey="showSaveJSON" />
+              </label>
+              <label className="app-checkbox-inline">
+                <input
+                  type="checkbox"
+                  checked={showImportPython}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setShowImportPython(checked);
+                    persistConfig({ showImportPython: checked });
+                  }}
+                />
+                <ConfigFieldTitle fieldKey="showImportPython" />
               </label>
               <label className="app-checkbox-inline">
                 <input
@@ -938,6 +955,7 @@ interface ConfigFormState {
   canClaimFuncs: boolean;
   callGraphOnly: boolean;
   showSaveJSON: boolean;
+  showImportPython: boolean;
   showTestDocumentation: boolean;
   showGlobalCode: boolean;
   showTestGlobalCode: boolean;
@@ -963,6 +981,7 @@ const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
   canClaimFuncs: 'Functions can be claimed',
   callGraphOnly: 'Call graph only mode',
   showSaveJSON: 'Show Save as JSON',
+  showImportPython: 'Show Import from Python',
   showTestDocumentation: 'Show test documentation',
   showGlobalCode: 'Show global code',
   showTestGlobalCode: 'Show test global code',
@@ -985,6 +1004,7 @@ const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   canClaimFuncs: `If checked, functions can be claimed by one author for separate colorizing/exporting. Default: ${String(DEFAULT_PLAN_CONFIG.canClaimFuncs)}`,
   callGraphOnly: `If checked, only the call graph is shown and most problem checking is suppressed. Default: ${String(DEFAULT_PLAN_CONFIG.callGraphOnly)}`,
   showSaveJSON: `If checked, the Save as JSON toolbar button is shown. Default: ${String(DEFAULT_PLAN_CONFIG.showSaveJSON)}`,
+  showImportPython: `If checked, students see the Import from Python toolbar button (staff always have it). Default: ${String(DEFAULT_PLAN_CONFIG.showImportPython)}`,
   showTestDocumentation: `If checked, students can see and edit module test documentation when any function is testable. Default: ${String(DEFAULT_PLAN_CONFIG.showTestDocumentation)}`,
   showGlobalCode: `If checked, students can see and edit module-level global code. Default: ${String(DEFAULT_PLAN_CONFIG.showGlobalCode)}`,
   showTestGlobalCode: `If checked, students can see and edit test setup / global test code. Default: ${String(DEFAULT_PLAN_CONFIG.showTestGlobalCode)}`,
@@ -1036,6 +1056,9 @@ function toSparseConfig(config: PlanConfig): Record<string, unknown> {
   }
   if (config.showSaveJSON !== DEFAULT_PLAN_CONFIG.showSaveJSON) {
     result.showSaveJSON = config.showSaveJSON;
+  }
+  if (config.showImportPython !== DEFAULT_PLAN_CONFIG.showImportPython) {
+    result.showImportPython = config.showImportPython;
   }
   if (config.showTestDocumentation !== DEFAULT_PLAN_CONFIG.showTestDocumentation) {
     result.showTestDocumentation = config.showTestDocumentation;

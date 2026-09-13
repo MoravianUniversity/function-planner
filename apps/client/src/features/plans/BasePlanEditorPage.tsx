@@ -139,7 +139,7 @@ export function BasePlanEditorPage({ courseId }: { courseId: string }) {
 
   // Authors editing the template should always be able to export/import JSON,
   // even if the published student UI hides Save as JSON.
-  const editorSettings = { ...settings, showSaveJSON: true };
+  const editorSettings = { ...settings, showSaveJSON: true, showImportPython: true };
 
   return (
     <FunctionPlannerHost

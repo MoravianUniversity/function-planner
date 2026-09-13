@@ -5,7 +5,7 @@
  * - Only top-level functions (no nested / async / class methods)
  * - Positional-only / keyword-only / *args / **kwargs not distinguished; defaults ignored
  * - Direct I/O via input()/print() (+ try/while as validation); comment overrides
- * - Call edges only for simple Name callees among top-level functions
+ * - Call edges from Name/Attribute callees among top-level functions, plus `# Calls` body comments
  *
  * Note: pass a pytest-style tests file via options.tests (or applyPythonTestsToModel)
  * to set testable / testCode / testDocumentation / testGlobalCode. Without tests,
@@ -78,11 +78,11 @@ export function pythonCodeToModel(code: string, options: PythonImportOptions = {
   const functions: FunctionBuild[] = functionNodes.map((node, index) => {
     const doc = getDocstring(node) || '';
     const { desc, docParams, docReturns } = parseDocstringParts(doc);
-    const codeBody = getFunctionCode(
-      node,
-      sourceLines,
-      nodeEndLine.get(node) ?? sourceLines.length + 1
-    );
+    const funcEndLine = nodeEndLine.get(node) ?? sourceLines.length + 1;
+    const codeBody = getFunctionCode(node, sourceLines, funcEndLine);
+    // Full span (including stub bodies) so `# Calls` / IO comment markers are not lost
+    // when getFunctionCode returns '' for trivial pass/dummy-return functions.
+    const funcSourceLines = sourceLines.slice(node.lineno - 1, funcEndLine - 1);
 
     const args: Arg[] = [
       ...(node.args?.posonlyargs || []),
@@ -96,34 +96,9 @@ export function pythonCodeToModel(code: string, options: PythonImportOptions = {
       args.push(node.args.kwarg);
     }
 
-    const called = new Set<string>();
-    for (const child of walk(node)) {
-      if (
-        child.nodeType === 'Call' &&
-        child.func?.nodeType === 'Name' &&
-        functionNames.has(child.func.id)
-      ) {
-        called.add(child.func.id);
-      }
-    }
-    for (const line of codeBody.split('\n')) {
-      const callMatch = line
-        .trim()
-        .match(
-          /^\s*#\s*Calls\s+([A-Za-z_][A-Za-z0-9_]*(\(\))?(?:\s*(,|\s|\sand\s)\s*[A-Za-z_][A-Za-z0-9_]*(\(\))?)*)\s*$/
-        );
-      if (callMatch) {
-        const callLine = callMatch[1]
-          .replace(/\(\)/g, '')
-          .replace(/,/g, ' ')
-          .replace(/\s+and\s+/g, ' ')
-          .replace(/\s+/g, ' ');
-        for (const calledFunc of callLine.split(' ')) {
-          if (functionNames.has(calledFunc)) {
-            called.add(calledFunc);
-          }
-        }
-      }
+    const called = calledFunctionNames(node, functionNames);
+    for (const name of commentedCallTargets(funcSourceLines, functionNames)) {
+      called.add(name);
     }
 
     return {
@@ -133,7 +108,7 @@ export function pythonCodeToModel(code: string, options: PythonImportOptions = {
       code: codeBody,
       params: extractParamTypes(args, docParams),
       returns: removeObjectType(extractReturnTypes(node.returns ?? null, docReturns)),
-      io: inferDirectIO(node, codeBody.split('\n')),
+      io: inferDirectIO(node, funcSourceLines),
       _callsByName: Array.from(called),
       testCode: '',
       testable: false,
@@ -375,14 +350,21 @@ function parseSphinxDocstring(lines: string[]): ParsedDocstring {
       (result = trimmed.match(/^[:@](param|type)\s+([*]{0,2}[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)$/))
     ) {
       key = result[1] === 'type' ? 'type' : 'desc';
-      currentParam = {};
-      params.set(result[2].replace(/^\*+/, ''), currentParam);
+      const name = result[2].replace(/^\*+/, '');
+      currentParam = params.get(name) || {};
+      params.set(name, currentParam);
       currentParam[key] = result[3].trim();
       currentReturn = null;
     } else if ((result = trimmed.match(/^[:@](return|rtype)\s*:\s*(.*)$/))) {
       key = result[1] === 'rtype' ? 'type' : 'desc';
-      currentReturn = {};
-      returns.push(currentReturn);
+      const last = returns[returns.length - 1];
+      // Merge paired :return: / :rtype: (either order) into one entry
+      if (last && !last[key]) {
+        currentReturn = last;
+      } else {
+        currentReturn = {};
+        returns.push(currentReturn);
+      }
       currentReturn[key] = result[2].trim();
       currentParam = null;
     } else if (currentParam && key) {
@@ -445,9 +427,15 @@ function parseNumpyDocstring(lines: string[]): ParsedDocstring {
         currentParam.desc = `${currentParam.desc || ''} ${trimmed.trim()}`.trim();
       }
     } else if (section === 'returns') {
-      // Optional name: type, or bare type
-      if ((result = line.match(/^(?:([A-Za-z_][A-Za-z0-9_]*)\s*:\s*)?(.+)\s*$/))) {
-        currentReturn = { type: (result[2] || '').trim(), desc: '' };
+      // Unindented "name : type" or bare type starts a return; indented lines are descriptions.
+      // (A previous catch-all matched indented desc lines as new returns and dropped their text
+      // when a signature annotation later took only docReturns[0].desc.)
+      if (!/^\s/.test(line) && trimmed !== '') {
+        if ((result = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/))) {
+          currentReturn = { type: result[2].trim(), desc: '' };
+        } else {
+          currentReturn = { type: trimmed, desc: '' };
+        }
         returns.push(currentReturn);
       } else if (currentReturn) {
         currentReturn.desc = `${currentReturn.desc || ''} ${trimmed.trim()}`.trim();
@@ -523,6 +511,47 @@ function parseGoogleDocstring(lines: string[]): ParsedDocstring {
     docParams: cleanupDescMap(params),
     docReturns: cleanupDescList(returns)
   };
+}
+
+function calledFunctionNames(node: FunctionDef, knownSet: Set<string>): Set<string> {
+  const found = new Set<string>();
+  for (const child of walk(node)) {
+    if (child.nodeType !== 'Call') {
+      continue;
+    }
+    const func = child.func;
+    if (func?.nodeType === 'Name' && knownSet.has(func.id)) {
+      found.add(func.id);
+    } else if (func?.nodeType === 'Attribute' && knownSet.has(func.attr)) {
+      found.add(func.attr);
+    }
+  }
+  return found;
+}
+
+function commentedCallTargets(funcSourceLines: string[], knownSet: Set<string>): Set<string> {
+  const found = new Set<string>();
+  for (const line of funcSourceLines) {
+    const callMatch = line
+      .trim()
+      .match(
+        /^\s*#\s*Calls\s+([A-Za-z_][A-Za-z0-9_]*(\(\))?(?:\s*(,|\s|\sand\s)\s*[A-Za-z_][A-Za-z0-9_]*(\(\))?)*)\s*$/i
+      );
+    if (!callMatch) {
+      continue;
+    }
+    const callLine = callMatch[1]
+      .replace(/\(\)/g, '')
+      .replace(/,/g, ' ')
+      .replace(/\s+and\s+/gi, ' ')
+      .replace(/\s+/g, ' ');
+    for (const calledFunc of callLine.split(' ')) {
+      if (knownSet.has(calledFunc)) {
+        found.add(calledFunc);
+      }
+    }
+  }
+  return found;
 }
 
 function inferDirectIO(funcNode: FunctionDef, funcSourceLines: string[]): string {

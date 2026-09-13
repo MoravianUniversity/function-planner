@@ -216,7 +216,7 @@ export function SolutionPlanEditorPage({ courseId }: { courseId: string }) {
     </span>
   );
 
-  const editorSettings = { ...settings, showSaveJSON: true };
+  const editorSettings = { ...settings, showSaveJSON: true, showImportPython: true };
 
   return (
     <>

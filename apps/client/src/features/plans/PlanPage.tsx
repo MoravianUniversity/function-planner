@@ -110,7 +110,13 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
   const expectedRoom = studentPlanRoomSegment(courseId, planId);
   const roomOk = Boolean(ticketPayload && ticketPayload.roomSegment === expectedRoom);
   const canEdit = Boolean(plan?.canEdit && !courseReadonly && !plan.readonly);
-  const settings = useMemo(() => parsePlanConfig(plan?.settings), [plan?.settings]);
+  const settings = useMemo(() => {
+    const parsed = parsePlanConfig(plan?.settings);
+    if (plan && !plan.isMember) {
+      return { ...parsed, showImportPython: true };
+    }
+    return parsed;
+  }, [plan?.settings, plan?.isMember]);
   const initialModel = useMemo(
     () => parsePlannerInitialModel(plan?.basePlanContent),
     [plan?.basePlanContent]

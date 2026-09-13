@@ -28,7 +28,6 @@ export interface StudentPlanSummary {
   id: string;
   basePlanId: string;
   title: string;
-  state: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE';
   readonly: boolean;
   /** Present on student home "Your Plans" rows. */
   members?: { firstName: string; lastName: string; email: string }[];

@@ -56,7 +56,6 @@ export interface BasePlanDetail {
 export interface StaffStudentPlanRow {
   id: string;
   title: string;
-  state: string;
   basePlanId: string;
   members: { user: { firstName: string; lastName: string; email: string } }[];
 }

@@ -725,11 +725,6 @@ textarea {
   color: var(--app-text-muted, #6b7280);
 }
 
-.app-instance-meta {
-  font-size: 0.875rem;
-  color: var(--app-text-muted);
-}
-
 .app-planner-shell {
   display: flex;
   flex-direction: column;

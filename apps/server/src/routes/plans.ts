@@ -441,7 +441,6 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
       plans.map((plan) => ({
         id: plan.id,
         title: plan.basePlan.title,
-        state: plan.state,
         basePlanId: plan.basePlanId,
         members: plan.members
       }))
@@ -590,7 +589,6 @@ router.post('/students/start', requireAuth, loadCourseContext, requireRole('STUD
         basePlanId: payload.basePlanId,
         courseId,
         content: '',
-        state: 'IN_PROGRESS',
         members: {
           createMany: {
             data: memberUserIds.map((memberId) => ({ userId: memberId }))
@@ -866,7 +864,6 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
       basePlanId: plan.basePlanId,
       title: plan.basePlan.title,
       content: plan.content,
-      state: plan.state,
       updatedAt: plan.updatedAt,
       currentUserId: user.id,
       isMember,

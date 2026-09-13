@@ -12,12 +12,6 @@ enum Role {
   STUDENT
 }
 
-enum StudentPlanState {
-  NOT_STARTED
-  IN_PROGRESS
-  COMPLETE
-}
-
 enum JoinRequestStatus {
   PENDING
   REJECTED
@@ -95,7 +89,6 @@ model StudentPlan {
   basePlanId  String
   content     String           @default("")
   yjsState    Bytes?
-  state       StudentPlanState @default(NOT_STARTED)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   course      Course           @relation(fields: [courseId], references: [id])

@@ -40,14 +40,12 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
     const mapStudentPlan = (sp: {
       id: string;
       basePlanId: string;
-      state: string;
       basePlan: { title: string };
       members?: { user: { firstName: string; lastName: string; email: string } }[];
     }) => ({
       id: sp.id,
       basePlanId: sp.basePlanId,
       title: sp.basePlan.title,
-      state: sp.state,
       readonly: isCourseReadonly(course.endsAt),
       ...(sp.members
         ? {

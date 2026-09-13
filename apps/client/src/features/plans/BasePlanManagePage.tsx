@@ -419,7 +419,6 @@ export function BasePlanManagePage({
                 <li key={row.id} className="app-student-instance-row">
                   <div className="app-student-instance-main">
                     <Link to={`/plans/${row.id}`}>{label}</Link>
-                    <span className="app-instance-meta"> · {prettyState(row.state)}</span>
                   </div>
                   <button
                     type="button"
@@ -923,10 +922,6 @@ function memberLabel(
     return names.join(', ');
   }
   return `${names.slice(0, 3).join(', ')} +${names.length - 3}`;
-}
-
-function prettyState(s: string): string {
-  return s.split('_').join(' ').toLowerCase();
 }
 
 /** Local form state for PATCH merge (same fields as form inputs). */

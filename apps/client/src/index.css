@@ -1047,6 +1047,8 @@ body.app-planner-immersive > #root > div {
   box-sizing: border-box;
   width: 1rem;
   height: 1rem;
+  padding: 0;
+  margin: 0;
   border-radius: 50%;
   font-size: 0.45rem;
   font-weight: 700;
@@ -1057,18 +1059,47 @@ body.app-planner-immersive > #root > div {
   opacity: 0.55;
   line-height: 1;
   flex-shrink: 0;
+  font-family: inherit;
+  cursor: default;
 }
 
-/* Same palette as function-planner-ui --group-N-color (author claim colors). */
-.app-planner-avatar--group-1 { background-color: #377eb840; }
-.app-planner-avatar--group-2 { background-color: #4daf4a40; }
-.app-planner-avatar--group-3 { background-color: #984ea340; }
-.app-planner-avatar--group-4 { background-color: #ff7f0040; }
-.app-planner-avatar--group-5 { background-color: #f781bf40; }
+.app-planner-avatar:disabled {
+  cursor: default;
+}
+
+.app-planner-avatar[aria-disabled='true'] {
+  cursor: default;
+}
+
+/* Solid hues matching graph editor presence dots (claim-group CSS uses translucent fills). */
+.app-planner-avatar--group-1 { background-color: #377eb8; color: #fff; }
+.app-planner-avatar--group-2 { background-color: #4daf4a; color: #fff; }
+.app-planner-avatar--group-3 { background-color: #984ea3; color: #fff; }
+.app-planner-avatar--group-4 { background-color: #ff7f00; color: #fff; }
+.app-planner-avatar--group-5 { background-color: #f781bf; color: #fff; }
 
 .app-planner-avatar--active {
   opacity: 1;
   border-color: #16a34a;
+}
+
+.app-planner-avatar--jumpable {
+  cursor: pointer;
+}
+
+.app-planner-avatar--jumpable:hover,
+.app-planner-avatar--jumpable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--app-focus-ring, rgba(14, 165, 233, 0.55));
+}
+
+.app-planner-avatar--following {
+  box-shadow: 0 0 0 2px #fbbf24;
+}
+
+.app-planner-avatar--following:hover,
+.app-planner-avatar--following:focus-visible {
+  box-shadow: 0 0 0 2px #f59e0b;
 }
 
 .app-planner-fallback {

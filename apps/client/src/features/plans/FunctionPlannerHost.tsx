@@ -13,7 +13,7 @@ export interface PlannerMember {
   active: boolean;
 }
 
-type FunctionPlannerHostProps = Omit<UseFunctionPlannerOptions, 'externalAuthors' | 'authorLabels'> & {
+type FunctionPlannerHostProps = Omit<UseFunctionPlannerOptions, 'externalAuthors' | 'authorLabels' | 'localUser'> & {
   members?: PlannerMember[];
   /**
    * When true (default if `members` is provided), lock authors to member emails
@@ -134,11 +134,32 @@ export function FunctionPlannerHost({
     return { externalAuthors: ids, authorLabels: labels };
   }, [authorsFromMembers, members]);
 
-  const { hostRef, status } = useFunctionPlanner({
-    ...plannerProps,
-    externalAuthors,
-    authorLabels
-  });
+  const localUser = useMemo(() => {
+    if (!currentUserId) {
+      return null;
+    }
+    const me = memberList.find((m) => m.userId === currentUserId);
+    if (!me) {
+      return null;
+    }
+    const authorId = (me.email || '').trim();
+    if (!authorId) {
+      return null;
+    }
+    return {
+      userId: me.userId,
+      authorId,
+      name: memberAuthorLabel(me)
+    };
+  }, [memberList, currentUserId]);
+
+  const { hostRef, status, memberFocusByUserId, jumpToMember, followingUserId, followMember } =
+    useFunctionPlanner({
+      ...plannerProps,
+      externalAuthors,
+      authorLabels,
+      localUser
+    });
   const ordered = sortMembers(memberList, currentUserId);
 
   return (
@@ -158,18 +179,55 @@ export function FunctionPlannerHost({
           {ordered.map((m) => {
             const isMe = m.userId === currentUserId;
             const name = memberAuthorLabel(m);
-            const tip = `${name}${isMe ? ' (you)' : ''}${m.active ? ' · in planner' : ' · offline'}`;
+            const inRoom = Object.prototype.hasOwnProperty.call(memberFocusByUserId, m.userId);
+            const canJump = inRoom;
+            const isFollowing = followingUserId === m.userId;
+            const tip = !inRoom
+              ? `${name} · offline`
+              : isMe
+                ? followingUserId
+                  ? `${name} · me · click to stop following`
+                  : `${name} · me`
+                : isFollowing
+                  ? `${name} · following · click to stop · double-click to follow`
+                  : `${name} · click to jump · double-click to follow`;
             const groupIndex = authorGroupIndex(m.email, externalAuthors ?? []);
             const groupClass = groupIndex >= 0 ? ` app-planner-avatar--group-${groupIndex + 1}` : '';
+            const jumpClass = canJump ? ' app-planner-avatar--jumpable' : '';
+            const followingClass = isFollowing ? ' app-planner-avatar--following' : '';
             return (
               <li key={m.userId}>
-                <span
-                  className={`app-planner-avatar${groupClass}${m.active ? ' app-planner-avatar--active' : ''}`}
+                <button
+                  type="button"
+                  className={`app-planner-avatar${groupClass}${m.active || inRoom ? ' app-planner-avatar--active' : ''}${jumpClass}${followingClass}`}
                   data-tip={tip}
                   aria-label={tip}
+                  aria-disabled={!canJump && !isMe}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Any single click clears follow mode.
+                    followMember(null);
+                    if (isMe || !canJump) {
+                      return;
+                    }
+                    jumpToMember(m.userId);
+                  }}
+                  onDoubleClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (isMe) {
+                      followMember(null);
+                      return;
+                    }
+                    if (!canJump) {
+                      return;
+                    }
+                    followMember(m.userId);
+                  }}
                 >
                   {memberInitials(m)}
-                </span>
+                </button>
               </li>
             );
           })}

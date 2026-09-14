@@ -68,6 +68,16 @@ declare module 'function-planner-ui' {
     /** Map of stable author id → display name. Missing entries fall back to the id. */
     authorLabels?: Record<string, string>;
     ydoc?: Doc;
+    /**
+     * Shared Yjs awareness from the host WebsocketProvider.
+     * Used for ephemeral per-function editing presence (not persisted).
+     */
+    awareness?: {
+      getStates(): Map<number, Record<string, unknown>>;
+      on(event: 'change', handler: () => void): void;
+      off(event: 'change', handler: () => void): void;
+      setLocalStateField(field: string, value: unknown): void;
+    };
     useIndexedDB?: boolean;
     readonly?: boolean;
     licenseKey?: string;
@@ -80,6 +90,10 @@ declare module 'function-planner-ui' {
     model: Model;
     diagram: unknown;
     setExternalAuthors(ids: string[] | null, labels?: Record<string, string>): void;
+    /** Select a function and scroll just enough for it to be fully visible. Returns false if not found. */
+    jumpToFunction(key: string): boolean;
+    /** Clear selection so the module inspector is shown. */
+    jumpToModule(): boolean;
     destroy(): void;
   }
 

@@ -4,7 +4,6 @@ import { WebsocketProvider } from 'y-websocket';
 import init, { BASIC_MODEL } from 'function-planner-ui';
 import 'function-planner-ui/style.css';
 import type { PlanConfig } from '@function-planner/shared';
-import { pythonCodeToModel } from '@function-planner/shared';
 import { watchPlannerTheme } from '../../theme';
 import type { YjsCollabStatus } from './yjsCollabStatus';
 
@@ -264,7 +263,6 @@ export function useFunctionPlanner({
       callGraphOnly: cfg.callGraphOnly,
       showSaveJSON: cfg.showSaveJSON,
       showImportPython: cfg.showImportPython,
-      pythonCodeToModel,
       showTestDocumentation: cfg.showTestDocumentation,
       showGlobalCode: cfg.showGlobalCode,
       showTestGlobalCode: cfg.showTestGlobalCode,

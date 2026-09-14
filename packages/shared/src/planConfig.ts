@@ -100,6 +100,7 @@ export const planConfigSchema = z.object({
   canClaimFuncs: z.boolean().optional(),
   callGraphOnly: z.boolean().optional(),
   showSaveJSON: z.boolean().optional(),
+  showLoadJSON: z.boolean().optional(),
   showImportPython: z.boolean().optional(),
   showTestDocumentation: z.boolean().optional(),
   showGlobalCode: z.boolean().optional(),
@@ -136,6 +137,7 @@ export type PlanConfig = {
   canClaimFuncs: boolean;
   callGraphOnly: boolean;
   showSaveJSON: boolean;
+  showLoadJSON: boolean;
   showImportPython: boolean;
   showTestDocumentation: boolean;
   showGlobalCode: boolean;
@@ -159,6 +161,7 @@ export const DEFAULT_PLAN_CONFIG: PlanConfig = {
   canClaimFuncs: false,
   callGraphOnly: false,
   showSaveJSON: false,
+  showLoadJSON: false,
   showImportPython: false,
   showTestDocumentation: false,
   showGlobalCode: false,
@@ -597,6 +600,7 @@ export function parsePlanConfig(raw: unknown): PlanConfig {
     canClaimFuncs: typeof value.canClaimFuncs === 'boolean' ? value.canClaimFuncs : DEFAULT_PLAN_CONFIG.canClaimFuncs,
     callGraphOnly: typeof value.callGraphOnly === 'boolean' ? value.callGraphOnly : DEFAULT_PLAN_CONFIG.callGraphOnly,
     showSaveJSON: typeof value.showSaveJSON === 'boolean' ? value.showSaveJSON : DEFAULT_PLAN_CONFIG.showSaveJSON,
+    showLoadJSON: typeof value.showLoadJSON === 'boolean' ? value.showLoadJSON : DEFAULT_PLAN_CONFIG.showLoadJSON,
     showImportPython:
       typeof value.showImportPython === 'boolean'
         ? value.showImportPython

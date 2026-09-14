@@ -37,7 +37,7 @@ export interface UseFunctionPlannerOptions {
   initialModel?: object | null;
   readonly?: boolean;
   adminMode?: boolean;
-  /** Show Load from JSON (replaces whole model); for base-plan authoring. */
+  /** Show Load from JSON; defaults to plan config when omitted. Authoring pages pass true. */
   showLoadJSON?: boolean;
   /**
    * When set (including `[]`), authors are locked to this list of stable ids
@@ -78,7 +78,7 @@ export function useFunctionPlanner({
   initialModel = null,
   readonly = false,
   adminMode = false,
-  showLoadJSON = false,
+  showLoadJSON,
   externalAuthors = null,
   authorLabels = EMPTY_AUTHOR_LABELS,
   enabled = true,
@@ -168,7 +168,7 @@ export function useFunctionPlanner({
       showTestCodeFor: cfg.showTestCodeFor,
       moduleReadOnly: cfg.moduleReadOnly,
       functionReadOnly: cfg.functionReadOnly,
-      showLoadJSON,
+      showLoadJSON: showLoadJSON ?? cfg.showLoadJSON,
       externalAuthors: initialAuthors,
       authorLabels: initialLabels,
       readonly,

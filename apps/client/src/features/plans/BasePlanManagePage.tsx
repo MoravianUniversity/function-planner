@@ -140,6 +140,7 @@ export function BasePlanManagePage({
   const [canClaimFuncs, setCanClaimFuncs] = useState(DEFAULT_PLAN_CONFIG.canClaimFuncs);
   const [callGraphOnly, setCallGraphOnly] = useState(DEFAULT_PLAN_CONFIG.callGraphOnly);
   const [showSaveJSON, setShowSaveJSON] = useState(DEFAULT_PLAN_CONFIG.showSaveJSON);
+  const [showLoadJSON, setShowLoadJSON] = useState(DEFAULT_PLAN_CONFIG.showLoadJSON);
   const [showImportPython, setShowImportPython] = useState(DEFAULT_PLAN_CONFIG.showImportPython);
   const [showTestDocumentation, setShowTestDocumentation] = useState(DEFAULT_PLAN_CONFIG.showTestDocumentation);
   const [showGlobalCode, setShowGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showGlobalCode);
@@ -200,6 +201,7 @@ export function BasePlanManagePage({
     setCanClaimFuncs(config.canClaimFuncs);
     setCallGraphOnly(config.callGraphOnly);
     setShowSaveJSON(config.showSaveJSON);
+    setShowLoadJSON(config.showLoadJSON);
     setShowImportPython(config.showImportPython);
     setShowTestDocumentation(config.showTestDocumentation);
     setShowGlobalCode(config.showGlobalCode);
@@ -247,6 +249,7 @@ export function BasePlanManagePage({
         canClaimFuncs,
         callGraphOnly,
         showSaveJSON,
+        showLoadJSON,
         showImportPython,
         showTestDocumentation,
         showGlobalCode,
@@ -282,6 +285,7 @@ export function BasePlanManagePage({
         canClaimFuncs: s.canClaimFuncs,
         callGraphOnly: s.callGraphOnly,
         showSaveJSON: s.showSaveJSON,
+        showLoadJSON: s.showLoadJSON,
         showImportPython: s.showImportPython,
         showTestDocumentation: s.showTestDocumentation,
         showGlobalCode: s.showGlobalCode,
@@ -425,55 +429,6 @@ export function BasePlanManagePage({
         </Link>
       </div>
 
-      <section className="app-manage-plan-section">
-        <h3>Student Plans</h3>
-        {!basePlan.published ? (
-          <p className="app-muted">Publish this plan before students can start submissions.</p>
-        ) : null}
-        {instancesLoading ? (
-          <p>Loading…</p>
-        ) : instances.length === 0 ? (
-          <p className="app-muted">
-            {basePlan.published
-              ? 'No student or group submissions for this plan yet.'
-              : 'No student plans yet.'}
-          </p>
-        ) : (
-          <ul className="app-student-instance-list">
-            {instances.map((row) => {
-              const label = memberLabel(row.members);
-              const emails = row.members
-                .map((m) => m.user?.email?.trim() ?? '')
-                .filter((value) => value.length > 0);
-              return (
-                <li key={row.id} className="app-student-instance-row">
-                  <div className="app-student-instance-main">
-                    <Link to={`/plans/${row.id}`}>{label}</Link>
-                  </div>
-                  <button
-                    type="button"
-                    className="app-btn"
-                    disabled={emails.length === 0}
-                    title={
-                      emails.length > 0
-                        ? `Compare Python code against ${label}`
-                        : 'No member email available'
-                    }
-                    onClick={() => {
-                      if (emails.length > 0) {
-                        setCompareTarget({ emails, label });
-                      }
-                    }}
-                  >
-                    Check against Python
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
       <section
         className={`app-manage-plan-section app-config-collapse ${configExpanded ? 'app-config-collapse--open' : ''}`}
         aria-hidden={!configExpanded}
@@ -492,6 +447,7 @@ export function BasePlanManagePage({
             <p><strong>Functions can be claimed:</strong> {canClaimFuncs ? 'Yes' : 'No'}</p>
             <p><strong>Call graph only mode:</strong> {callGraphOnly ? 'Yes' : 'No'}</p>
             <p><strong>Show Save as JSON:</strong> {showSaveJSON ? 'Yes' : 'No'}</p>
+            <p><strong>Show Load from JSON:</strong> {showLoadJSON ? 'Yes' : 'No'}</p>
             <p><strong>Show Import from Python:</strong> {showImportPython ? 'Yes' : 'No'}</p>
             <p><strong>Show test documentation:</strong> {showTestDocumentation ? 'Yes' : 'No'}</p>
             <p><strong>Show global code:</strong> {showGlobalCode ? 'Yes' : 'No'}</p>
@@ -511,28 +467,34 @@ export function BasePlanManagePage({
         ) : (
           <>
             <form className="app-config-form" onSubmit={saveConfigure}>
-              <div className="app-config-form-texts">
+              <div className="app-config-form-aligned">
+              <div className="app-config-form-full">
                 <label htmlFor="plan-config-title">
                   <ConfigFieldTitle fieldKey='title' />
                 </label>
                 <input
                   id="plan-config-title"
                   type="text"
+                  className="app-config-regex"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={() => persistConfig()}
                 />
+              </div>
+              <div className="app-config-form-full">
                 <label htmlFor="plan-allowed-types">
                   <ConfigFieldTitle fieldKey="allowedTypes" />
                 </label>
                 <input
-                    id="plan-allowed-types"
-                    type="text"
-                    value={allowedTypesText}
-                    onChange={(e) => setAllowedTypesText(e.target.value)}
-                    onBlur={() => persistConfig()}
-                  />
+                  id="plan-allowed-types"
+                  type="text"
+                  className="app-config-regex"
+                  value={allowedTypesText}
+                  onChange={(e) => setAllowedTypesText(e.target.value)}
+                  onBlur={() => persistConfig()}
+                />
               </div>
+              <div className="app-config-form-numbers">
               <label htmlFor="plan-min-functions">
                 <ConfigFieldTitle fieldKey="minFunctions" />
               </label>
@@ -617,90 +579,120 @@ export function BasePlanManagePage({
                   persistConfig({ minReturnDescLength: v });
                 }}
               />
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={canClaimFuncs}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setCanClaimFuncs(checked);
-                    persistConfig({ canClaimFuncs: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="canClaimFuncs" />
-              </label>
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={callGraphOnly}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setCallGraphOnly(checked);
-                    persistConfig({ callGraphOnly: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="callGraphOnly" />
-              </label>
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={showSaveJSON}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setShowSaveJSON(checked);
-                    persistConfig({ showSaveJSON: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="showSaveJSON" />
-              </label>
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={showImportPython}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setShowImportPython(checked);
-                    persistConfig({ showImportPython: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="showImportPython" />
-              </label>
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={showTestDocumentation}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setShowTestDocumentation(checked);
-                    persistConfig({ showTestDocumentation: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="showTestDocumentation" />
-              </label>
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={showGlobalCode}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setShowGlobalCode(checked);
-                    persistConfig({ showGlobalCode: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="showGlobalCode" />
-              </label>
-              <label className="app-checkbox-inline">
-                <input
-                  type="checkbox"
-                  checked={showTestGlobalCode}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setShowTestGlobalCode(checked);
-                    persistConfig({ showTestGlobalCode: checked });
-                  }}
-                />
-                <ConfigFieldTitle fieldKey="showTestGlobalCode" />
-              </label>
+              </div>
+              <div className="app-config-form-full">
+                <span className="app-config-group-label" title={CONFIG_FIELD_HELP.canClaimFuncs}>
+                  Functions
+                </span>
+                <div className="app-config-checkbox-group">
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.canClaimFuncs}>
+                    <input
+                      type="checkbox"
+                      checked={canClaimFuncs}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setCanClaimFuncs(checked);
+                        persistConfig({ canClaimFuncs: checked });
+                      }}
+                    />
+                    can be claimed
+                  </label>
+                </div>
+              </div>
+              <div className="app-config-form-full">
+                <span className="app-config-group-label">Show Buttons</span>
+                <div className="app-config-checkbox-group">
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.showSaveJSON}>
+                    <input
+                      type="checkbox"
+                      checked={showSaveJSON}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowSaveJSON(checked);
+                        persistConfig({ showSaveJSON: checked });
+                      }}
+                    />
+                    Save as JSON
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.showLoadJSON}>
+                    <input
+                      type="checkbox"
+                      checked={showLoadJSON}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowLoadJSON(checked);
+                        persistConfig({ showLoadJSON: checked });
+                      }}
+                    />
+                    Load from JSON
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.showImportPython}>
+                    <input
+                      type="checkbox"
+                      checked={showImportPython}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowImportPython(checked);
+                        persistConfig({ showImportPython: checked });
+                      }}
+                    />
+                    Import from Python
+                  </label>
+                </div>
+              </div>
+              <div className="app-config-form-full">
+                <span className="app-config-group-label">Show</span>
+                <div className="app-config-checkbox-group">
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.callGraphOnly}>
+                    <input
+                      type="checkbox"
+                      checked={callGraphOnly}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setCallGraphOnly(checked);
+                        persistConfig({ callGraphOnly: checked });
+                      }}
+                    />
+                    call graph only
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.showTestDocumentation}>
+                    <input
+                      type="checkbox"
+                      checked={showTestDocumentation}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowTestDocumentation(checked);
+                        persistConfig({ showTestDocumentation: checked });
+                      }}
+                    />
+                    test documentation
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.showGlobalCode}>
+                    <input
+                      type="checkbox"
+                      checked={showGlobalCode}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowGlobalCode(checked);
+                        persistConfig({ showGlobalCode: checked });
+                      }}
+                    />
+                    global code
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.showTestGlobalCode}>
+                    <input
+                      type="checkbox"
+                      checked={showTestGlobalCode}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowTestGlobalCode(checked);
+                        persistConfig({ showTestGlobalCode: checked });
+                      }}
+                    />
+                    test global code
+                  </label>
+                </div>
+              </div>
               <div className="app-config-form-full">
                 <label htmlFor="plan-show-code-for">
                   <ConfigFieldTitle fieldKey="showCodeFor" />
@@ -708,7 +700,7 @@ export function BasePlanManagePage({
                 <input
                   id="plan-show-code-for"
                   type="text"
-                  className="code-font"
+                  className="code-font app-config-regex"
                   value={showCodeFor}
                   placeholder="e.g. ^(main|helper)$ or .*"
                   onChange={(e) => setShowCodeFor(e.target.value)}
@@ -722,7 +714,7 @@ export function BasePlanManagePage({
                 <input
                   id="plan-show-test-code-for"
                   type="text"
-                  className="code-font"
+                  className="code-font app-config-regex"
                   value={showTestCodeFor}
                   placeholder="e.g. ^(add|multiply)$ or .*"
                   onChange={(e) => setShowTestCodeFor(e.target.value)}
@@ -783,10 +775,10 @@ export function BasePlanManagePage({
                 ) : null}
               </div>
               <div className="app-config-form-full app-config-function-readonly">
-                <div className="app-config-function-readonly-header">
-                  <label>
-                    <ConfigFieldTitle fieldKey="functionReadOnly" />
-                  </label>
+                <label>
+                  <ConfigFieldTitle fieldKey="functionReadOnly" />
+                </label>
+                <div className="app-config-function-readonly-body">
                   <button
                     type="button"
                     className="app-btn"
@@ -796,223 +788,279 @@ export function BasePlanManagePage({
                   >
                     Add rule
                   </button>
-                </div>
-                {functionReadOnly.length === 0 ? (
-                  <p className="app-muted">No function readonly rules (students can edit all function fields).</p>
-                ) : (
-                  <ul className="app-config-function-readonly-list">
-                    {functionReadOnly.map((rule, index) => {
-                      const mode: FunctionReadOnlyMode = rule.fields === true ? 'all' : 'custom';
-                      const fields = rule.fields === true ? [] : rule.fields;
-                      return (
-                        <li key={index} className="app-config-function-readonly-rule">
-                          <div className="app-config-function-readonly-rule-row">
-                            <label htmlFor={`plan-func-ro-for-${index}`}>For</label>
-                            <input
-                              id={`plan-func-ro-for-${index}`}
-                              type="text"
-                              className="code-font"
-                              value={rule.for}
-                              placeholder="e.g. ^(main|helper)$ or .*"
-                              onChange={(e) => {
-                                const next = functionReadOnly.map((r, i) =>
-                                  i === index ? { ...r, for: e.target.value } : r
-                                );
-                                setFunctionReadOnly(next);
-                              }}
-                              onBlur={(e) => {
-                                const next = functionReadOnly.map((r, i) =>
-                                  i === index ? { ...r, for: e.target.value } : r
-                                );
-                                setFunctionReadOnly(next);
-                                persistConfig({ functionReadOnly: next });
-                              }}
-                            />
-                            <label htmlFor={`plan-func-ro-mode-${index}`}>Fields</label>
-                            <select
-                              id={`plan-func-ro-mode-${index}`}
-                              value={mode}
-                              onChange={(e) => {
-                                const nextMode = e.target.value as FunctionReadOnlyMode;
-                                const next = functionReadOnly.map((r, i) => {
-                                  if (i !== index) {
-                                    return r;
-                                  }
-                                  if (nextMode === 'all') {
-                                    return { for: r.for, fields: true as const };
-                                  }
-                                  return {
-                                    ...r,
-                                    fields:
-                                      r.fields === true
-                                        ? [...functionReadOnlyFieldValues]
-                                        : [...r.fields]
-                                  };
-                                });
-                                setFunctionReadOnly(next);
-                                if (next[index]?.for.trim()) {
+                  {functionReadOnly.length === 0 ? (
+                    <p className="app-muted">No function readonly rules (students can edit all function fields).</p>
+                  ) : (
+                    <ul className="app-config-function-readonly-list">
+                      {functionReadOnly.map((rule, index) => {
+                        const mode: FunctionReadOnlyMode = rule.fields === true ? 'all' : 'custom';
+                        const fields = rule.fields === true ? [] : rule.fields;
+                        return (
+                          <li key={index} className="app-config-function-readonly-rule">
+                            <div className="app-config-function-readonly-rule-row">
+                              <div className="app-config-function-readonly-rule-group app-config-function-readonly-rule-group--for">
+                                <label htmlFor={`plan-func-ro-for-${index}`}>For</label>
+                                <input
+                                  id={`plan-func-ro-for-${index}`}
+                                  type="text"
+                                  className="code-font app-config-regex"
+                                  value={rule.for}
+                                  placeholder="e.g. ^(main|helper)$ or .*"
+                                  onChange={(e) => {
+                                    const next = functionReadOnly.map((r, i) =>
+                                      i === index ? { ...r, for: e.target.value } : r
+                                    );
+                                    setFunctionReadOnly(next);
+                                  }}
+                                  onBlur={(e) => {
+                                    const next = functionReadOnly.map((r, i) =>
+                                      i === index ? { ...r, for: e.target.value } : r
+                                    );
+                                    setFunctionReadOnly(next);
+                                    persistConfig({ functionReadOnly: next });
+                                  }}
+                                />
+                              </div>
+                              <div className="app-config-function-readonly-rule-group">
+                                <label htmlFor={`plan-func-ro-mode-${index}`}>Fields</label>
+                                <select
+                                  id={`plan-func-ro-mode-${index}`}
+                                  value={mode}
+                                  onChange={(e) => {
+                                    const nextMode = e.target.value as FunctionReadOnlyMode;
+                                    const next = functionReadOnly.map((r, i) => {
+                                      if (i !== index) {
+                                        return r;
+                                      }
+                                      if (nextMode === 'all') {
+                                        return { for: r.for, fields: true as const };
+                                      }
+                                      return {
+                                        ...r,
+                                        fields:
+                                          r.fields === true
+                                            ? [...functionReadOnlyFieldValues]
+                                            : [...r.fields]
+                                      };
+                                    });
+                                    setFunctionReadOnly(next);
+                                    if (next[index]?.for.trim()) {
+                                      persistConfig({ functionReadOnly: next });
+                                    }
+                                  }}
+                                >
+                                  <option value="all">all</option>
+                                  <option value="custom">custom</option>
+                                </select>
+                              </div>
+                              <button
+                                type="button"
+                                className="app-btn"
+                                aria-label={`Remove readonly rule ${index + 1}`}
+                                onClick={() => {
+                                  const next = functionReadOnly.filter((_, i) => i !== index);
+                                  setFunctionReadOnly(next);
                                   persistConfig({ functionReadOnly: next });
-                                }
-                              }}
-                            >
-                              <option value="all">all</option>
-                              <option value="custom">custom</option>
-                            </select>
-                            <button
-                              type="button"
-                              className="app-btn"
-                              aria-label={`Remove readonly rule ${index + 1}`}
-                              onClick={() => {
-                                const next = functionReadOnly.filter((_, i) => i !== index);
-                                setFunctionReadOnly(next);
-                                persistConfig({ functionReadOnly: next });
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          {mode === 'custom' ? (
-                            <div className="app-config-readonly-fields app-config-readonly-fields--nested">
-                              {FUNCTION_READONLY_CHECKBOX_FIELDS.map((field) => {
-                                const checked = isFunctionReadOnlyFieldChecked(fields, field);
-                                return (
-                                  <div key={field} className="app-config-function-readonly-field">
-                                    <label className="app-checkbox-inline">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={(e) => {
-                                          const next = functionReadOnly.map((r, i) =>
-                                            i === index
-                                              ? applyFunctionFieldToggle(r, field, e.target.checked)
-                                              : r
-                                          );
-                                          setFunctionReadOnly(next);
-                                          if (next[index]?.for.trim()) {
-                                            persistConfig({ functionReadOnly: next });
-                                          }
-                                        }}
-                                      />
-                                      {FUNCTION_READONLY_FIELD_LABELS[field]}
-                                    </label>
-                                    {field === 'params' && checked ? (
-                                      <div className="app-config-function-readonly-facets">
-                                        <div className="app-config-function-readonly-facets-row">
-                                          {ALL_PARAM_FACETS.map((facet) => (
-                                            <label key={facet} className="app-checkbox-inline">
-                                              <input
-                                                type="checkbox"
-                                                checked={uiParamFacets(rule).includes(facet)}
-                                                onChange={(e) => {
-                                                  const next = functionReadOnly.map((r, i) =>
-                                                    i === index
-                                                      ? applyParamFacetToggle(
-                                                          r,
-                                                          facet,
-                                                          e.target.checked
-                                                        )
-                                                      : r
-                                                  );
-                                                  setFunctionReadOnly(next);
-                                                  if (next[index]?.for.trim()) {
-                                                    persistConfig({ functionReadOnly: next });
-                                                  }
-                                                }}
-                                              />
-                                              {PARAM_FACET_LABELS[facet]}
-                                            </label>
-                                          ))}
-                                        </div>
-                                        <div className="app-config-function-readonly-param-for">
-                                          <label htmlFor={`plan-func-ro-param-for-${index}`}>
-                                            Only param names matching
-                                          </label>
-                                          <input
-                                            id={`plan-func-ro-param-for-${index}`}
-                                            type="text"
-                                            className="code-font"
-                                            value={uiParamFor(rule)}
-                                            placeholder="e.g. ^(n|count)$ — empty = all"
-                                            onChange={(e) => {
-                                              const next = functionReadOnly.map((r, i) =>
-                                                i === index ? applyParamFor(r, e.target.value) : r
-                                              );
-                                              setFunctionReadOnly(next);
-                                            }}
-                                            onBlur={(e) => {
-                                              const next = functionReadOnly.map((r, i) =>
-                                                i === index ? applyParamFor(r, e.target.value) : r
-                                              );
-                                              setFunctionReadOnly(next);
-                                              if (next[index]?.for.trim()) {
-                                                persistConfig({ functionReadOnly: next });
-                                              }
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                    {field === 'returns' && checked ? (
-                                      <div className="app-config-function-readonly-facets">
-                                        <div className="app-config-function-readonly-facets-row">
-                                          {ALL_RETURN_FACETS.map((facet) => (
-                                            <label key={facet} className="app-checkbox-inline">
-                                              <input
-                                                type="checkbox"
-                                                checked={uiReturnFacets(rule).includes(facet)}
-                                                onChange={(e) => {
-                                                  const next = functionReadOnly.map((r, i) =>
-                                                    i === index
-                                                      ? applyReturnFacetToggle(
-                                                          r,
-                                                          facet,
-                                                          e.target.checked
-                                                        )
-                                                      : r
-                                                  );
-                                                  setFunctionReadOnly(next);
-                                                  if (next[index]?.for.trim()) {
-                                                    persistConfig({ functionReadOnly: next });
-                                                  }
-                                                }}
-                                              />
-                                              {RETURN_FACET_LABELS[facet]}
-                                            </label>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
+                                }}
+                              >
+                                Remove
+                              </button>
                             </div>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                            {mode === 'custom' ? (
+                              <div className="app-config-readonly-fields app-config-readonly-fields--nested">
+                                {FUNCTION_READONLY_CHECKBOX_FIELDS.map((field) => {
+                                  const checked = isFunctionReadOnlyFieldChecked(fields, field);
+                                  return (
+                                    <div key={field} className="app-config-function-readonly-field">
+                                      <label className="app-checkbox-inline">
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={(e) => {
+                                            const next = functionReadOnly.map((r, i) =>
+                                              i === index
+                                                ? applyFunctionFieldToggle(r, field, e.target.checked)
+                                                : r
+                                            );
+                                            setFunctionReadOnly(next);
+                                            if (next[index]?.for.trim()) {
+                                              persistConfig({ functionReadOnly: next });
+                                            }
+                                          }}
+                                        />
+                                        {FUNCTION_READONLY_FIELD_LABELS[field]}
+                                      </label>
+                                      {field === 'params' && checked ? (
+                                        <div className="app-config-function-readonly-facets">
+                                          <div className="app-config-function-readonly-facets-row">
+                                            {ALL_PARAM_FACETS.map((facet) => (
+                                              <label key={facet} className="app-checkbox-inline">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={uiParamFacets(rule).includes(facet)}
+                                                  onChange={(e) => {
+                                                    const next = functionReadOnly.map((r, i) =>
+                                                      i === index
+                                                        ? applyParamFacetToggle(
+                                                            r,
+                                                            facet,
+                                                            e.target.checked
+                                                          )
+                                                        : r
+                                                    );
+                                                    setFunctionReadOnly(next);
+                                                    if (next[index]?.for.trim()) {
+                                                      persistConfig({ functionReadOnly: next });
+                                                    }
+                                                  }}
+                                                />
+                                                {PARAM_FACET_LABELS[facet]}
+                                              </label>
+                                            ))}
+                                          </div>
+                                          <div className="app-config-function-readonly-param-for">
+                                            <label htmlFor={`plan-func-ro-param-for-${index}`}>
+                                              Only param names matching
+                                            </label>
+                                            <input
+                                              id={`plan-func-ro-param-for-${index}`}
+                                              type="text"
+                                              className="code-font app-config-regex"
+                                              value={uiParamFor(rule)}
+                                              placeholder="e.g. ^(n|count)$ — empty = all"
+                                              onChange={(e) => {
+                                                const next = functionReadOnly.map((r, i) =>
+                                                  i === index ? applyParamFor(r, e.target.value) : r
+                                                );
+                                                setFunctionReadOnly(next);
+                                              }}
+                                              onBlur={(e) => {
+                                                const next = functionReadOnly.map((r, i) =>
+                                                  i === index ? applyParamFor(r, e.target.value) : r
+                                                );
+                                                setFunctionReadOnly(next);
+                                                if (next[index]?.for.trim()) {
+                                                  persistConfig({ functionReadOnly: next });
+                                                }
+                                              }}
+                                            />
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                      {field === 'returns' && checked ? (
+                                        <div className="app-config-function-readonly-facets">
+                                          <div className="app-config-function-readonly-facets-row">
+                                            {ALL_RETURN_FACETS.map((facet) => (
+                                              <label key={facet} className="app-checkbox-inline">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={uiReturnFacets(rule).includes(facet)}
+                                                  onChange={(e) => {
+                                                    const next = functionReadOnly.map((r, i) =>
+                                                      i === index
+                                                        ? applyReturnFacetToggle(
+                                                            r,
+                                                            facet,
+                                                            e.target.checked
+                                                          )
+                                                        : r
+                                                    );
+                                                    setFunctionReadOnly(next);
+                                                    if (next[index]?.for.trim()) {
+                                                      persistConfig({ functionReadOnly: next });
+                                                    }
+                                                  }}
+                                                />
+                                                {RETURN_FACET_LABELS[facet]}
+                                              </label>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               </div>
-              <label htmlFor="plan-doc-style">
-                <ConfigFieldTitle fieldKey="docStyle" />
-              </label>
-              <select
-                id="plan-doc-style"
-                value={docStyle}
-                onChange={(e) => {
-                  const value = e.target.value as DocStyle;
-                  setDocStyle(value);
-                  persistConfig({ docStyle: value });
-                }}
-              >
-                {DOC_STYLE_OPTIONS.map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
+              <div className="app-config-form-full">
+                <label htmlFor="plan-doc-style">
+                  <ConfigFieldTitle fieldKey="docStyle" />
+                </label>
+                <select
+                  id="plan-doc-style"
+                  value={docStyle}
+                  onChange={(e) => {
+                    const value = e.target.value as DocStyle;
+                    setDocStyle(value);
+                    persistConfig({ docStyle: value });
+                  }}
+                >
+                  {DOC_STYLE_OPTIONS.map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </div>
+              </div>
             </form>
           </>
         )}
         </div>
+      </section>
+
+      <section className="app-manage-plan-section">
+        <h3>Student Plans</h3>
+        {!basePlan.published ? (
+          <p className="app-muted">Publish this plan before students can start submissions.</p>
+        ) : null}
+        {instancesLoading ? (
+          <p>Loading…</p>
+        ) : instances.length === 0 ? (
+          <p className="app-muted">
+            {basePlan.published
+              ? 'No student or group submissions for this plan yet.'
+              : 'No student plans yet.'}
+          </p>
+        ) : (
+          <ul className="app-student-instance-list">
+            {instances.map((row) => {
+              const label = memberLabel(row.members);
+              const emails = row.members
+                .map((m) => m.user?.email?.trim() ?? '')
+                .filter((value) => value.length > 0);
+              return (
+                <li key={row.id} className="app-student-instance-row">
+                  <div className="app-student-instance-main">
+                    <Link to={`/plans/${row.id}`}>{label}</Link>
+                  </div>
+                  <button
+                    type="button"
+                    className="app-btn"
+                    disabled={emails.length === 0}
+                    title={
+                      emails.length > 0
+                        ? `Compare Python code against ${label}`
+                        : 'No member email available'
+                    }
+                    onClick={() => {
+                      if (emails.length > 0) {
+                        setCompareTarget({ emails, label });
+                      }
+                    }}
+                  >
+                    Check against Python
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {compareTarget ? (
@@ -1069,6 +1117,7 @@ interface ConfigFormState {
   canClaimFuncs: boolean;
   callGraphOnly: boolean;
   showSaveJSON: boolean;
+  showLoadJSON: boolean;
   showImportPython: boolean;
   showTestDocumentation: boolean;
   showGlobalCode: boolean;
@@ -1095,6 +1144,7 @@ const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
   canClaimFuncs: 'Functions can be claimed',
   callGraphOnly: 'Call graph only mode',
   showSaveJSON: 'Show Save as JSON',
+  showLoadJSON: 'Show Load from JSON',
   showImportPython: 'Show Import from Python',
   showTestDocumentation: 'Show test documentation',
   showGlobalCode: 'Show global code',
@@ -1118,6 +1168,7 @@ const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   canClaimFuncs: `If checked, functions can be claimed by one author for separate colorizing/exporting. Default: ${String(DEFAULT_PLAN_CONFIG.canClaimFuncs)}`,
   callGraphOnly: `If checked, only the call graph is shown and most problem checking is suppressed. Default: ${String(DEFAULT_PLAN_CONFIG.callGraphOnly)}`,
   showSaveJSON: `If checked, the Save as JSON toolbar button is shown. Default: ${String(DEFAULT_PLAN_CONFIG.showSaveJSON)}`,
+  showLoadJSON: `If checked, the Load from JSON toolbar button is shown (replaces the whole plan from a file). Default: ${String(DEFAULT_PLAN_CONFIG.showLoadJSON)}`,
   showImportPython: `If checked, students see the Import from Python toolbar button (staff always have it). Default: ${String(DEFAULT_PLAN_CONFIG.showImportPython)}`,
   showTestDocumentation: `If checked, students can see and edit module test documentation when any function is testable. Default: ${String(DEFAULT_PLAN_CONFIG.showTestDocumentation)}`,
   showGlobalCode: `If checked, students can see and edit module-level global code. Default: ${String(DEFAULT_PLAN_CONFIG.showGlobalCode)}`,
@@ -1170,6 +1221,9 @@ function toSparseConfig(config: PlanConfig): Record<string, unknown> {
   }
   if (config.showSaveJSON !== DEFAULT_PLAN_CONFIG.showSaveJSON) {
     result.showSaveJSON = config.showSaveJSON;
+  }
+  if (config.showLoadJSON !== DEFAULT_PLAN_CONFIG.showLoadJSON) {
+    result.showLoadJSON = config.showLoadJSON;
   }
   if (config.showImportPython !== DEFAULT_PLAN_CONFIG.showImportPython) {
     result.showImportPython = config.showImportPython;

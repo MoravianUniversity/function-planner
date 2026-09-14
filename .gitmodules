@@ -1,3 +1,6 @@
 [submodule "packages/function-planner-ui"]
 	path = packages/function-planner-ui
 	url = git@github.com:MoravianUniversity/function-planner-ui.git
+[submodule "packages/shared"]
+	path = packages/shared
+	url = git@github.com:MoravianUniversity/function-planner-shared.git

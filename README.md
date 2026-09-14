@@ -2,7 +2,7 @@
 
 This monorepo is the **authentication, course administration, roster, plan lifecycle, and multi-user Yjs collaboration** half of Function Planner, plus the embedded planner diagram UI.
 
-The planner UI (diagram, function model, config-driven checking) lives in the [`function-planner-ui`](https://github.com/MoravianUniversity/function-planner-ui) submodule at [`packages/function-planner-ui`](packages/function-planner-ui). Student plans and the staff base-plan editor both use that UI against ticketed Yjs rooms.
+The planner UI (diagram, function model, config-driven checking) lives in the [`function-planner-ui`](https://github.com/MoravianUniversity/function-planner-ui) submodule at [`packages/function-planner-ui`](packages/function-planner-ui). Shared types and schemas live in the [`function-planner-shared`](https://github.com/MoravianUniversity/function-planner-shared) submodule at [`packages/shared`](packages/shared). Student plans and the staff base-plan editor both use that UI against ticketed Yjs rooms.
 
 ## Monorepo layout
 
@@ -10,7 +10,7 @@ The planner UI (diagram, function model, config-driven checking) lives in the [`
 |------|------|
 | `apps/server` | Express API, Google OAuth sessions, Prisma/Postgres, Yjs WebSocket (`/yjs`) with Postgres persistence |
 | `apps/client` | React shell: courses, roster, base-plan manage/publish, student start/join/leave, planner host |
-| `packages/shared` | Shared TypeScript types and Zod schemas |
+| `packages/shared` | Git submodule: shared TypeScript types and Zod schemas |
 | `packages/function-planner-ui` | Git submodule: GoJS planner (`init` + Yjs model) |
 
 ## What works today

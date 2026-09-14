@@ -5,7 +5,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faCheck, faCopy, faGear, faXmark, faCircleCheck, faPenToSquare, faKey } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import {
+  ALL_PARAM_FACETS,
+  ALL_RETURN_FACETS,
   DEFAULT_PLAN_CONFIG,
+  compactFunctionReadOnlyRule,
   docStyleValues,
   functionReadOnlyFieldValues,
   moduleReadOnlyFieldValues,
@@ -15,7 +18,9 @@ import {
   type FunctionReadOnlyRule,
   type ModuleReadOnly,
   type ModuleReadOnlyField,
-  type PlanConfig
+  type ParamFacet,
+  type PlanConfig,
+  type ReturnFacet
 } from '@function-planner/shared';
 import { apiGet, apiSend } from '../../api/client';
 import type { BasePlanDetail, CoursesResponse, StaffStudentPlanRow } from '../../types/api';
@@ -26,6 +31,11 @@ const BASE_PLAN_PUBLISH_TOAST_ID = 'base-plan-publish';
 const COPY_PLAN_URL_TOAST_ID = 'copy-published-plan-url';
 const DOC_STYLE_OPTIONS = docStyleValues;
 
+/** Fields shown as top-level checkboxes (no bare `calls`; into/outOf only). */
+const FUNCTION_READONLY_CHECKBOX_FIELDS = functionReadOnlyFieldValues.filter(
+  (f): f is Exclude<FunctionReadOnlyField, 'calls'> => f !== 'calls'
+);
+
 const MODULE_READONLY_FIELD_LABELS: Record<ModuleReadOnlyField, string> = {
   documentation: 'documentation',
   testDocumentation: 'testDocumentation',
@@ -33,7 +43,7 @@ const MODULE_READONLY_FIELD_LABELS: Record<ModuleReadOnlyField, string> = {
   testGlobalCode: 'testGlobalCode'
 };
 
-const FUNCTION_READONLY_FIELD_LABELS: Record<FunctionReadOnlyField, string> = {
+const FUNCTION_READONLY_FIELD_LABELS: Record<Exclude<FunctionReadOnlyField, 'calls'>, string> = {
   name: 'name',
   params: 'params',
   returns: 'returns',
@@ -43,9 +53,21 @@ const FUNCTION_READONLY_FIELD_LABELS: Record<FunctionReadOnlyField, string> = {
   owner: 'owner',
   code: 'code',
   testCode: 'testCode',
-  calls: 'calls',
-  callsInto: 'callsInto',
-  callsOutOf: 'callsOutOf'
+  callsInto: 'callsInto (incoming)',
+  callsOutOf: 'callsOutOf (outgoing)'
+};
+
+const PARAM_FACET_LABELS: Record<ParamFacet, string> = {
+  structure: 'Cannot add, remove, or reorder',
+  name: 'Names read-only',
+  type: 'Types read-only',
+  desc: 'Descriptions read-only'
+};
+
+const RETURN_FACET_LABELS: Record<ReturnFacet, string> = {
+  structure: 'Cannot add, remove, or reorder',
+  type: 'Types read-only',
+  desc: 'Descriptions read-only'
 };
 
 type ModuleReadOnlyMode = 'all' | 'none' | 'custom';
@@ -190,7 +212,11 @@ export function BasePlanManagePage({
     setFunctionReadOnly((prev) => {
       const fromServer: FunctionReadOnlyRule[] = config.functionReadOnly.map((rule) => ({
         for: rule.for,
-        fields: rule.fields === true ? true : [...rule.fields]
+        fields: rule.fields === true ? true : [...rule.fields],
+        ...(rule.paramLock
+          ? { paramLock: { ...rule.paramLock, facets: [...rule.paramLock.facets] } }
+          : {}),
+        ...(rule.returnLock ? { returnLock: { facets: [...rule.returnLock.facets] } } : {})
       }));
       // Keep in-progress rows (empty regex) across saves/refetch.
       const drafts = prev.filter((rule) => !rule.for.trim());
@@ -813,7 +839,7 @@ export function BasePlanManagePage({
                                     return r;
                                   }
                                   if (nextMode === 'all') {
-                                    return { ...r, fields: true as const };
+                                    return { for: r.for, fields: true as const };
                                   }
                                   return {
                                     ...r,
@@ -847,28 +873,116 @@ export function BasePlanManagePage({
                           </div>
                           {mode === 'custom' ? (
                             <div className="app-config-readonly-fields app-config-readonly-fields--nested">
-                              {functionReadOnlyFieldValues.map((field) => {
-                                const checked = fields.includes(field);
+                              {FUNCTION_READONLY_CHECKBOX_FIELDS.map((field) => {
+                                const checked = isFunctionReadOnlyFieldChecked(fields, field);
                                 return (
-                                  <label key={field} className="app-checkbox-inline">
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={(e) => {
-                                        const nextFields: FunctionReadOnlyField[] = e.target.checked
-                                          ? [...fields.filter((f) => f !== field), field]
-                                          : fields.filter((f) => f !== field);
-                                        const next = functionReadOnly.map((r, i) =>
-                                          i === index ? { ...r, fields: nextFields } : r
-                                        );
-                                        setFunctionReadOnly(next);
-                                        if (next[index]?.for.trim()) {
-                                          persistConfig({ functionReadOnly: next });
-                                        }
-                                      }}
-                                    />
-                                    {FUNCTION_READONLY_FIELD_LABELS[field]}
-                                  </label>
+                                  <div key={field} className="app-config-function-readonly-field">
+                                    <label className="app-checkbox-inline">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(e) => {
+                                          const next = functionReadOnly.map((r, i) =>
+                                            i === index
+                                              ? applyFunctionFieldToggle(r, field, e.target.checked)
+                                              : r
+                                          );
+                                          setFunctionReadOnly(next);
+                                          if (next[index]?.for.trim()) {
+                                            persistConfig({ functionReadOnly: next });
+                                          }
+                                        }}
+                                      />
+                                      {FUNCTION_READONLY_FIELD_LABELS[field]}
+                                    </label>
+                                    {field === 'params' && checked ? (
+                                      <div className="app-config-function-readonly-facets">
+                                        <div className="app-config-function-readonly-facets-row">
+                                          {ALL_PARAM_FACETS.map((facet) => (
+                                            <label key={facet} className="app-checkbox-inline">
+                                              <input
+                                                type="checkbox"
+                                                checked={uiParamFacets(rule).includes(facet)}
+                                                onChange={(e) => {
+                                                  const next = functionReadOnly.map((r, i) =>
+                                                    i === index
+                                                      ? applyParamFacetToggle(
+                                                          r,
+                                                          facet,
+                                                          e.target.checked
+                                                        )
+                                                      : r
+                                                  );
+                                                  setFunctionReadOnly(next);
+                                                  if (next[index]?.for.trim()) {
+                                                    persistConfig({ functionReadOnly: next });
+                                                  }
+                                                }}
+                                              />
+                                              {PARAM_FACET_LABELS[facet]}
+                                            </label>
+                                          ))}
+                                        </div>
+                                        <div className="app-config-function-readonly-param-for">
+                                          <label htmlFor={`plan-func-ro-param-for-${index}`}>
+                                            Only param names matching
+                                          </label>
+                                          <input
+                                            id={`plan-func-ro-param-for-${index}`}
+                                            type="text"
+                                            className="code-font"
+                                            value={uiParamFor(rule)}
+                                            placeholder="e.g. ^(n|count)$ — empty = all"
+                                            onChange={(e) => {
+                                              const next = functionReadOnly.map((r, i) =>
+                                                i === index ? applyParamFor(r, e.target.value) : r
+                                              );
+                                              setFunctionReadOnly(next);
+                                            }}
+                                            onBlur={(e) => {
+                                              const next = functionReadOnly.map((r, i) =>
+                                                i === index ? applyParamFor(r, e.target.value) : r
+                                              );
+                                              setFunctionReadOnly(next);
+                                              if (next[index]?.for.trim()) {
+                                                persistConfig({ functionReadOnly: next });
+                                              }
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                    {field === 'returns' && checked ? (
+                                      <div className="app-config-function-readonly-facets">
+                                        <div className="app-config-function-readonly-facets-row">
+                                          {ALL_RETURN_FACETS.map((facet) => (
+                                            <label key={facet} className="app-checkbox-inline">
+                                              <input
+                                                type="checkbox"
+                                                checked={uiReturnFacets(rule).includes(facet)}
+                                                onChange={(e) => {
+                                                  const next = functionReadOnly.map((r, i) =>
+                                                    i === index
+                                                      ? applyReturnFacetToggle(
+                                                          r,
+                                                          facet,
+                                                          e.target.checked
+                                                        )
+                                                      : r
+                                                  );
+                                                  setFunctionReadOnly(next);
+                                                  if (next[index]?.for.trim()) {
+                                                    persistConfig({ functionReadOnly: next });
+                                                  }
+                                                }}
+                                              />
+                                              {RETURN_FACET_LABELS[facet]}
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
                                 );
                               })}
                             </div>
@@ -1011,7 +1125,7 @@ const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   showCodeFor: `Regex matched against function names to show the function code editor. Empty shows none; use .* for all. Prefer anchors for exact names, e.g. ^(main|helper)$ — without ^…$ a pattern like main also matches maintain. Default: (empty).`,
   showTestCodeFor: `Regex matched against function names to show the test code editor (also requires Testable). Empty shows none; use .* for all. Prefer anchors for exact names, e.g. ^(add|multiply)$ — without ^…$ a pattern like add also matches address. Default: (empty).`,
   moduleReadOnly: `Which module fields students cannot edit: all, none, or a custom subset (${moduleReadOnlyFieldValues.join(', ')}). Default: none.`,
-  functionReadOnly: `List of rules locking function fields for matching names. Each rule has a regex (prefer ^…$) and fields (all or a custom subset of ${functionReadOnlyFieldValues.join(', ')}). When multiple rules match, fields are unioned (all wins). Default: (none).`
+  functionReadOnly: `List of rules locking function fields for matching names. Each rule has a regex (prefer ^…$) and fields (all or a custom subset). For params/returns you can lock structure (no add/remove/reorder) and/or names/types/descriptions; optionally limit param locks with a param-name regex. Checking both callsInto and callsOutOf stores as calls. When multiple rules match, fields are unioned (all wins). Default: (none).`
 };
 
 function ConfigFieldTitle({fieldKey}: {fieldKey: ConfigFieldKey}) {
@@ -1096,13 +1210,219 @@ function equalStringArrays(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+/** `calls` in storage means both into and outOf are checked in the UI. */
+function isFunctionReadOnlyFieldChecked(
+  fields: FunctionReadOnlyField[],
+  field: Exclude<FunctionReadOnlyField, 'calls'>
+): boolean {
+  if (field === 'callsInto' || field === 'callsOutOf') {
+    return fields.includes(field) || fields.includes('calls');
+  }
+  return fields.includes(field);
+}
+
+function toggleFunctionReadOnlyField(
+  fields: FunctionReadOnlyField[],
+  field: Exclude<FunctionReadOnlyField, 'calls'>,
+  checked: boolean
+): FunctionReadOnlyField[] {
+  if (field === 'callsInto' || field === 'callsOutOf') {
+    let into = fields.includes('callsInto') || fields.includes('calls');
+    let out = fields.includes('callsOutOf') || fields.includes('calls');
+    if (field === 'callsInto') {
+      into = checked;
+    } else {
+      out = checked;
+    }
+    const rest = fields.filter((f) => f !== 'calls' && f !== 'callsInto' && f !== 'callsOutOf');
+    if (into && out) {
+      return [...rest, 'calls'];
+    }
+    if (into) {
+      return [...rest, 'callsInto'];
+    }
+    if (out) {
+      return [...rest, 'callsOutOf'];
+    }
+    return rest;
+  }
+  if (checked) {
+    return [...fields.filter((f) => f !== field), field];
+  }
+  return fields.filter((f) => f !== field);
+}
+
+function equalFacetLists(left: string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const set = new Set(left);
+  return right.every((f) => set.has(f));
+}
+
+/** UI expansion: missing paramLock with params checked ⇒ all facets. */
+function uiParamFacets(rule: FunctionReadOnlyRule): ParamFacet[] {
+  if (rule.fields === true || !Array.isArray(rule.fields) || !rule.fields.includes('params')) {
+    return [];
+  }
+  if (!rule.paramLock) {
+    return [...ALL_PARAM_FACETS];
+  }
+  return [...rule.paramLock.facets];
+}
+
+function uiParamFor(rule: FunctionReadOnlyRule): string {
+  return rule.paramLock?.for ?? '';
+}
+
+function uiReturnFacets(rule: FunctionReadOnlyRule): ReturnFacet[] {
+  if (rule.fields === true || !Array.isArray(rule.fields) || !rule.fields.includes('returns')) {
+    return [];
+  }
+  if (!rule.returnLock) {
+    return [...ALL_RETURN_FACETS];
+  }
+  return [...rule.returnLock.facets];
+}
+
+function stripParamLock(rule: FunctionReadOnlyRule): FunctionReadOnlyRule {
+  const { paramLock: _removed, ...rest } = rule;
+  return rest;
+}
+
+function stripReturnLock(rule: FunctionReadOnlyRule): FunctionReadOnlyRule {
+  const { returnLock: _removed, ...rest } = rule;
+  return rest;
+}
+
+function withParamLockState(
+  rule: FunctionReadOnlyRule,
+  facets: ParamFacet[],
+  forPat: string
+): FunctionReadOnlyRule {
+  if (rule.fields === true) {
+    return rule;
+  }
+  const fields = rule.fields.includes('params')
+    ? rule.fields
+    : [...rule.fields, 'params' as const];
+  const trimmed = forPat.trim();
+  if (facets.length === 0) {
+    return stripParamLock({
+      ...rule,
+      fields: fields.filter((f) => f !== 'params')
+    });
+  }
+  if (equalFacetLists(facets, ALL_PARAM_FACETS) && !trimmed) {
+    return stripParamLock({ ...rule, fields });
+  }
+  return {
+    ...rule,
+    fields,
+    paramLock: trimmed ? { for: trimmed, facets } : { facets }
+  };
+}
+
+function withReturnLockState(rule: FunctionReadOnlyRule, facets: ReturnFacet[]): FunctionReadOnlyRule {
+  if (rule.fields === true) {
+    return rule;
+  }
+  const fields = rule.fields.includes('returns')
+    ? rule.fields
+    : [...rule.fields, 'returns' as const];
+  if (facets.length === 0) {
+    return stripReturnLock({
+      ...rule,
+      fields: fields.filter((f) => f !== 'returns')
+    });
+  }
+  if (equalFacetLists(facets, ALL_RETURN_FACETS)) {
+    return stripReturnLock({ ...rule, fields });
+  }
+  return { ...rule, fields, returnLock: { facets } };
+}
+
+function applyFunctionFieldToggle(
+  rule: FunctionReadOnlyRule,
+  field: Exclude<FunctionReadOnlyField, 'calls'>,
+  checked: boolean
+): FunctionReadOnlyRule {
+  if (rule.fields === true) {
+    return rule;
+  }
+  const nextFields = toggleFunctionReadOnlyField(rule.fields, field, checked);
+  let next: FunctionReadOnlyRule = { ...rule, fields: nextFields };
+  if (field === 'params') {
+    if (!checked) {
+      next = stripParamLock(next);
+    } else if (!next.paramLock) {
+      // Full lock by default (all facets, no for) — omit paramLock.
+      next = stripParamLock(next);
+    }
+  }
+  if (field === 'returns') {
+    if (!checked) {
+      next = stripReturnLock(next);
+    } else {
+      next = stripReturnLock(next);
+    }
+  }
+  return next;
+}
+
+function applyParamFacetToggle(
+  rule: FunctionReadOnlyRule,
+  facet: ParamFacet,
+  checked: boolean
+): FunctionReadOnlyRule {
+  const current = uiParamFacets(rule);
+  const nextFacets = checked
+    ? [...current.filter((f) => f !== facet), facet]
+    : current.filter((f) => f !== facet);
+  return withParamLockState(rule, nextFacets, uiParamFor(rule));
+}
+
+function applyParamFor(rule: FunctionReadOnlyRule, forPat: string): FunctionReadOnlyRule {
+  return withParamLockState(rule, uiParamFacets(rule), forPat);
+}
+
+function applyReturnFacetToggle(
+  rule: FunctionReadOnlyRule,
+  facet: ReturnFacet,
+  checked: boolean
+): FunctionReadOnlyRule {
+  const current = uiReturnFacets(rule);
+  const nextFacets = checked
+    ? [...current.filter((f) => f !== facet), facet]
+    : current.filter((f) => f !== facet);
+  return withReturnLockState(rule, nextFacets);
+}
+
 function sanitizeFunctionReadOnly(rules: FunctionReadOnlyRule[]): FunctionReadOnlyRule[] {
   return rules
-    .map((rule): FunctionReadOnlyRule => ({
-      for: rule.for.trim(),
-      fields: rule.fields === true ? true : [...rule.fields]
-    }))
+    .map((rule) =>
+      compactFunctionReadOnlyRule({
+        for: rule.for.trim(),
+        fields: rule.fields === true ? true : [...rule.fields],
+        ...(rule.paramLock ? { paramLock: rule.paramLock } : {}),
+        ...(rule.returnLock ? { returnLock: rule.returnLock } : {})
+      })
+    )
     .filter((rule) => rule.for.length > 0);
+}
+
+function formatLockSuffix(rule: FunctionReadOnlyRule): string {
+  const parts: string[] = [];
+  if (rule.paramLock) {
+    const forPat = rule.paramLock.for?.trim();
+    parts.push(
+      `paramLock[${rule.paramLock.facets.join(',')}${forPat ? ` for=${forPat}` : ''}]`
+    );
+  }
+  if (rule.returnLock) {
+    parts.push(`returnLock[${rule.returnLock.facets.join(',')}]`);
+  }
+  return parts.length ? ` (${parts.join('; ')})` : '';
 }
 
 function formatFunctionReadOnly(rules: FunctionReadOnlyRule[]): string {
@@ -1113,9 +1433,35 @@ function formatFunctionReadOnly(rules: FunctionReadOnlyRule[]): string {
   return cleaned
     .map((rule) => {
       const fields = rule.fields === true ? 'all' : rule.fields.join(', ') || '(no fields)';
-      return `${rule.for} → ${fields}`;
+      return `${rule.for} → ${fields}${formatLockSuffix(rule)}`;
     })
     .join('; ');
+}
+
+function equalParamLock(
+  left: FunctionReadOnlyRule['paramLock'],
+  right: FunctionReadOnlyRule['paramLock']
+): boolean {
+  if (!left && !right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return (left.for ?? '') === (right.for ?? '') && equalFacetLists(left.facets, right.facets);
+}
+
+function equalReturnLock(
+  left: FunctionReadOnlyRule['returnLock'],
+  right: FunctionReadOnlyRule['returnLock']
+): boolean {
+  if (!left && !right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return equalFacetLists(left.facets, right.facets);
 }
 
 function equalFunctionReadOnly(left: FunctionReadOnlyRule[], right: FunctionReadOnlyRule[]): boolean {
@@ -1130,6 +1476,10 @@ function equalFunctionReadOnly(left: FunctionReadOnlyRule[], right: FunctionRead
     if (rule.fields === true || other.fields === true) {
       return rule.fields === other.fields;
     }
-    return equalStringArrays(rule.fields, other.fields);
+    return (
+      equalStringArrays(rule.fields, other.fields) &&
+      equalParamLock(rule.paramLock, other.paramLock) &&
+      equalReturnLock(rule.returnLock, other.returnLock)
+    );
   });
 }

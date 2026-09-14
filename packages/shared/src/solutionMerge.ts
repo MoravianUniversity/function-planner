@@ -1,11 +1,18 @@
 import {
+  ALL_PARAM_FACETS,
   functionReadOnlyFieldValues,
+  functionNameMatchesPattern,
+  isFunctionFieldLocked,
   moduleReadOnlyFieldValues,
   resolveFunctionReadOnly,
-  type FunctionReadOnlyField,
   type ModuleReadOnly,
   type ModuleReadOnlyField,
-  type PlanConfig
+  type ParamFacet,
+  type PlanConfig,
+  type ResolvedFunctionReadOnly,
+  type ResolvedParamLock,
+  type ResolvedReturnLock,
+  type ReturnFacet
 } from './planConfig.js';
 
 export type PlannerCall = { from: string; to: string; [key: string]: unknown };
@@ -21,6 +28,9 @@ export type PlannerModel = {
   calls: PlannerCall[];
   [key: string]: unknown;
 };
+
+type ParamEntry = { name?: string; type?: string; desc?: string; [key: string]: unknown };
+type ReturnEntry = { type?: string; desc?: string; [key: string]: unknown };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -39,17 +49,155 @@ function isModuleFieldLocked(field: ModuleReadOnlyField, moduleReadOnly: ModuleR
   return moduleReadOnly.includes(field);
 }
 
-function isFunctionFieldLocked(
-  field: FunctionReadOnlyField,
-  policy: boolean | FunctionReadOnlyField[]
-): boolean {
+function asParamList(value: unknown): ParamEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => asRecord(item) ?? {}).map((r) => ({ ...r }));
+}
+
+function asReturnList(value: unknown): ReturnEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => asRecord(item) ?? {}).map((r) => ({ ...r }));
+}
+
+function isFullParamLocks(locks: ResolvedParamLock[]): boolean {
+  return locks.some(
+    (lock) =>
+      lock.for === '.*' &&
+      ALL_PARAM_FACETS.every((f) => lock.facets.includes(f))
+  );
+}
+
+function isFullReturnLocks(locks: ResolvedReturnLock[]): boolean {
+  return locks.some((lock) =>
+    (['structure', 'type', 'desc'] as const).every((f) => lock.facets.includes(f))
+  );
+}
+
+function paramFacetLocked(locks: ResolvedParamLock[], paramName: string, facet: Exclude<ParamFacet, 'structure'>): boolean {
+  return locks.some(
+    (lock) => lock.facets.includes(facet) && functionNameMatchesPattern(paramName, lock.for)
+  );
+}
+
+function returnFacetLocked(locks: ResolvedReturnLock[], facet: Exclude<ReturnFacet, 'structure'>): boolean {
+  return locks.some((lock) => lock.facets.includes(facet));
+}
+
+function mergeParamEntry(baseP: ParamEntry | undefined, solP: ParamEntry | undefined, locks: ResolvedParamLock[]): ParamEntry {
+  const base = baseP ? structuredClone(baseP) : {};
+  const sol = solP ? structuredClone(solP) : {};
+  const nameForMatch = typeof sol.name === 'string' ? sol.name : typeof base.name === 'string' ? base.name : '';
+  const merged: ParamEntry = { ...base, ...sol };
+
+  if (paramFacetLocked(locks, nameForMatch, 'name')) {
+    if (typeof base.name === 'string') {
+      merged.name = base.name;
+    } else if ('name' in base) {
+      merged.name = base.name;
+    }
+  }
+  if (paramFacetLocked(locks, nameForMatch, 'type')) {
+    if ('type' in base) {
+      merged.type = base.type;
+    }
+  }
+  if (paramFacetLocked(locks, nameForMatch, 'desc')) {
+    if ('desc' in base) {
+      merged.desc = base.desc;
+    }
+  }
+  return merged;
+}
+
+function mergeParams(
+  baseParams: unknown,
+  solParams: unknown,
+  locks: ResolvedParamLock[]
+): ParamEntry[] {
+  const baseList = asParamList(baseParams);
+  const solList = asParamList(solParams);
+  if (locks.length === 0) {
+    return solList.length > 0 ? solList : baseList;
+  }
+  if (isFullParamLocks(locks)) {
+    return baseList;
+  }
+  const structureLocked = locks.some((lock) => lock.facets.includes('structure'));
+  if (structureLocked) {
+    return baseList.map((baseP, i) => {
+      const baseName = typeof baseP.name === 'string' ? baseP.name : '';
+      const byName = baseName
+        ? solList.find((p) => typeof p.name === 'string' && p.name === baseName)
+        : undefined;
+      const solP = byName ?? solList[i];
+      return mergeParamEntry(baseP, solP, locks);
+    });
+  }
+  return solList.map((solP, i) => {
+    const solName = typeof solP.name === 'string' ? solP.name : '';
+    const byName = solName
+      ? baseList.find((p) => typeof p.name === 'string' && p.name === solName)
+      : undefined;
+    const baseP = byName ?? baseList[i];
+    return mergeParamEntry(baseP, solP, locks);
+  });
+}
+
+function mergeReturnEntry(baseR: ReturnEntry | undefined, solR: ReturnEntry | undefined, locks: ResolvedReturnLock[]): ReturnEntry {
+  const base = baseR ? structuredClone(baseR) : {};
+  const sol = solR ? structuredClone(solR) : {};
+  const merged: ReturnEntry = { ...base, ...sol };
+  if (returnFacetLocked(locks, 'type') && 'type' in base) {
+    merged.type = base.type;
+  }
+  if (returnFacetLocked(locks, 'desc') && 'desc' in base) {
+    merged.desc = base.desc;
+  }
+  return merged;
+}
+
+function mergeReturns(
+  baseReturns: unknown,
+  solReturns: unknown,
+  locks: ResolvedReturnLock[]
+): ReturnEntry[] {
+  const baseList = asReturnList(baseReturns);
+  const solList = asReturnList(solReturns);
+  if (locks.length === 0) {
+    return solList.length > 0 ? solList : baseList;
+  }
+  if (isFullReturnLocks(locks)) {
+    return baseList;
+  }
+  const structureLocked = locks.some((lock) => lock.facets.includes('structure'));
+  if (structureLocked) {
+    return baseList.map((baseR, i) => mergeReturnEntry(baseR, solList[i], locks));
+  }
+  return solList.map((solR, i) => mergeReturnEntry(baseList[i], solR, locks));
+}
+
+function paramLocksOf(policy: ResolvedFunctionReadOnly): ResolvedParamLock[] {
   if (policy === true) {
-    return true;
+    return [{ for: '.*', facets: [...ALL_PARAM_FACETS] }];
   }
   if (policy === false) {
-    return false;
+    return [];
   }
-  return policy.includes(field);
+  return policy.params;
+}
+
+function returnLocksOf(policy: ResolvedFunctionReadOnly): ResolvedReturnLock[] {
+  if (policy === true) {
+    return [{ facets: ['structure', 'type', 'desc'] }];
+  }
+  if (policy === false) {
+    return [];
+  }
+  return policy.returns;
 }
 
 /**
@@ -114,6 +262,18 @@ export function mergeBaseIntoSolution(
         if (typeof baseFn.name === 'string') {
           merged.name = baseFn.name;
         }
+        continue;
+      }
+      if (field === 'params') {
+        merged.params = mergeParams(baseFn.params, solFn.params, paramLocksOf(policy));
+        continue;
+      }
+      if (field === 'returns') {
+        merged.returns = mergeReturns(baseFn.returns, solFn.returns, returnLocksOf(policy));
+        continue;
+      }
+      if (field === 'calls' || field === 'callsInto' || field === 'callsOutOf') {
+        // Call graph is owned by the template below; skip per-function call fields.
         continue;
       }
       if (isFunctionFieldLocked(field, policy)) {

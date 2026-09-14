@@ -138,7 +138,8 @@ function applyLocalAwarenessState(
         userId: undefined,
         authorId: undefined,
         name: undefined,
-        editingFuncKey: prev.editingFuncKey ?? null
+        editingFuncKey: prev.editingFuncKey ?? null,
+        editingFieldId: prev.editingFieldId ?? null
       });
     }
     return;
@@ -149,7 +150,8 @@ function applyLocalAwarenessState(
     userId: localUser.userId,
     authorId: localUser.authorId,
     name: localUser.name,
-    editingFuncKey: prev.editingFuncKey ?? null
+    editingFuncKey: prev.editingFuncKey ?? null,
+    editingFieldId: prev.editingFieldId ?? null
   });
 }
 

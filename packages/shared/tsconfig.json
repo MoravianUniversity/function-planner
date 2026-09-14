@@ -1,9 +1,14 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "rootDir": "src",
     "outDir": "dist",
     "declaration": true
   },

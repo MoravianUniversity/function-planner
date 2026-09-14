@@ -2,16 +2,18 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFileImport, faPlus } from '@fortawesome/free-solid-svg-icons';
+import { faCopy, faFileImport, faPlus } from '@fortawesome/free-solid-svg-icons';
 import { apiGet } from '../../api/client';
 import type { HomeResponse } from '../../types/api';
 import { ComparePythonDialog } from '../plans/ComparePythonDialog';
+import { CopyPlansDialog } from './CopyPlansDialog';
 import { CreatePlanDialog } from './CreatePlanDialog';
 import { ImportPlansDialog } from './ImportPlansDialog';
 
 export function HomePage({ courseId }: { courseId: string }) {
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
   const [importPlansOpen, setImportPlansOpen] = useState(false);
+  const [copyPlansOpen, setCopyPlansOpen] = useState(false);
   const [compareTarget, setCompareTarget] = useState<{
     basePlanId: string;
     emails: string[];
@@ -124,6 +126,12 @@ export function HomePage({ courseId }: { courseId: string }) {
             <>
               <CreatePlanDialog courseId={courseId} open={createPlanOpen} onOpenChange={setCreatePlanOpen} />
               <ImportPlansDialog courseId={courseId} open={importPlansOpen} onOpenChange={setImportPlansOpen} />
+              <CopyPlansDialog
+                courseId={courseId}
+                plans={data.staffView.basePlans}
+                open={copyPlansOpen}
+                onOpenChange={setCopyPlansOpen}
+              />
               <div className="app-toolbar app-toolbar--spaced">
                 <button
                   type="button"
@@ -133,11 +141,14 @@ export function HomePage({ courseId }: { courseId: string }) {
                 >
                   <FontAwesomeIcon icon={faPlus} /> New plan
                 </button>
+                <button type="button" className="app-btn" disabled={data.readonly} onClick={() => setCopyPlansOpen(true)}>
+                  <FontAwesomeIcon icon={faCopy} /> Copy plan
+                </button>
                 <button type="button" className="app-btn" disabled={data.readonly} onClick={() => setImportPlansOpen(true)}>
                   <FontAwesomeIcon icon={faFileImport} /> Import from another course
                 </button>
               </div>
-              {data.readonly ? <p className="app-muted">Readonly: you cannot create or import plans.</p> : null}
+              {data.readonly ? <p className="app-muted">Readonly: you cannot create, copy, or import plans.</p> : null}
             </>
           ) : null}
           <ul className="app-plan-list">

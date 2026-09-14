@@ -467,7 +467,6 @@ export function BasePlanManagePage({
         ) : (
           <>
             <form className="app-config-form" onSubmit={saveConfigure}>
-              <div className="app-config-form-aligned">
               <div className="app-config-form-full">
                 <label htmlFor="plan-config-title">
                   <ConfigFieldTitle fieldKey='title' />
@@ -798,7 +797,7 @@ export function BasePlanManagePage({
                         return (
                           <li key={index} className="app-config-function-readonly-rule">
                             <div className="app-config-function-readonly-rule-row">
-                              <div className="app-config-function-readonly-rule-group app-config-function-readonly-rule-group--for">
+                              <div className="app-config-function-readonly-rule-group">
                                 <label htmlFor={`plan-func-ro-for-${index}`}>For</label>
                                 <input
                                   id={`plan-func-ro-for-${index}`}
@@ -867,7 +866,7 @@ export function BasePlanManagePage({
                               </button>
                             </div>
                             {mode === 'custom' ? (
-                              <div className="app-config-readonly-fields app-config-readonly-fields--nested">
+                              <div className="app-config-readonly-fields--nested">
                                 {FUNCTION_READONLY_CHECKBOX_FIELDS.map((field) => {
                                   const checked = isFunctionReadOnlyFieldChecked(fields, field);
                                   return (
@@ -1006,7 +1005,6 @@ export function BasePlanManagePage({
                     <option key={value} value={value}>{value}</option>
                   ))}
                 </select>
-              </div>
               </div>
             </form>
           </>

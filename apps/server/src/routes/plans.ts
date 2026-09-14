@@ -12,6 +12,7 @@ import type {
 import {
   comparePlans,
   comparePythonSchema,
+  copyBasePlanSchema,
   createBasePlanSchema,
   importBasePlansSchema,
   mergeBaseIntoSolution,
@@ -201,6 +202,58 @@ router.post('/import', requireAuth, loadCourseContext, requireRole('INSTRUCTOR')
 
     res.status(201).json({ imported: created.length, plans: created });
   } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/copy', requireAuth, loadCourseContext, requireRole('INSTRUCTOR'), rejectReadonlyCourseWrites, async (req, res, next) => {
+  try {
+    const { courseId } = res.locals.auth;
+    const { sourceBasePlanId, id, title, copyConfiguration, copyBasePlan, copySolution } =
+      copyBasePlanSchema.parse(req.body);
+
+    const src = await prisma.basePlan.findFirst({
+      where: { courseId, id: sourceBasePlanId }
+    });
+    if (!src) {
+      return res.status(400).json({ message: `Invalid source plan: ${sourceBasePlanId}` });
+    }
+
+    if (id === sourceBasePlanId) {
+      return res.status(400).json({ message: 'New plan id must be different from the source plan id.' });
+    }
+
+    const settingsPayload: Prisma.InputJsonValue | undefined =
+      copyConfiguration && src.settings !== null && src.settings !== undefined
+        ? (src.settings as Prisma.InputJsonValue)
+        : undefined;
+
+    const content = copyBasePlan ? src.content : '';
+    const hasSourceSolution =
+      copySolution && (Boolean(src.solutionBaseContentHash) || Boolean(src.solutionContent.trim()));
+
+    const copy = await prisma.basePlan.create({
+      data: {
+        courseId,
+        id,
+        title,
+        content,
+        published: false,
+        ...(settingsPayload !== undefined ? { settings: settingsPayload } : {}),
+        ...(hasSourceSolution
+          ? {
+              solutionContent: src.solutionContent,
+              solutionBaseContentHash: src.solutionBaseContentHash ?? hashBaseContent(src.content)
+            }
+          : {})
+      }
+    });
+
+    res.status(201).json(copy);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: 'Plan id already exists. Choose a different id.' });
+    }
     next(error);
   }
 });

@@ -79,6 +79,22 @@ export const importBasePlansSchema = z.object({
     .min(1)
 });
 
+export const copyBasePlanSchema = z
+  .object({
+    sourceBasePlanId: z.string().min(1),
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Plan id must use lowercase letters, numbers, and hyphens.'),
+    title: z.string().min(1),
+    copyConfiguration: z.boolean(),
+    copyBasePlan: z.boolean(),
+    copySolution: z.boolean()
+  })
+  .refine((data) => data.copyConfiguration || data.copyBasePlan || data.copySolution, {
+    message: 'Select at least one of configuration, base plan, or solution to copy.'
+  });
+
 export const collabBasePlanTicketSchema = z.object({
   courseId: z.string().min(1),
   basePlanId: z.string().min(1)

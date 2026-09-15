@@ -1,0 +1,33 @@
+# Example systemd unit for the Function Planner API.
+# The client is static files served by nginx — no client unit is needed.
+#
+# Install:
+#   1. Adjust User, Group, WorkingDirectory, and EnvironmentFile for your host
+#      (paths below assume a checkout at /opt/function-planner after `npm run build`)
+#   2. sudo cp deploy/systemd/function-planner-api.service.example \
+#        /etc/systemd/system/function-planner-api.service
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now function-planner-api
+#
+# apps/server/src/loadEnv.ts also loads apps/server/.env; EnvironmentFile= still
+# sets NODE_ENV and any vars before Node starts. ExecStart calls node directly
+# (equivalent to `npm run start -w apps/server`) so the unit does not depend on npm.
+
+[Unit]
+Description=Function Planner API
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=function-planner
+Group=function-planner
+WorkingDirectory=/opt/function-planner/apps/server
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/function-planner/apps/server/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

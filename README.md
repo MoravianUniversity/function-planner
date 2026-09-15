@@ -120,6 +120,22 @@ Health check: `GET http://localhost:3000/healthz` → `{"ok":true}`.
 - Override: set `VITE_API_BASE_URL` when starting the client (e.g. empty/`""` if you prefer same-origin requests through the Vite proxy).
 - Yjs always connects to the **page host** (`/yjs`), so the Vite WS proxy matters when using the client on `:5174`.
 
+## Production (nginx + systemd)
+
+Serve the built client and API on one hostname. `/yjs` is only the API WebSocket; the SPA does not own that path, so path-based routing works the same as the Vite dev proxy.
+
+1. Build: set `VITE_API_BASE_URL` empty (same-origin `/api`) and `VITE_GOJS_LICENSE_KEY` in `apps/client/.env`, then `npm run build`. Nginx `root` must be [`apps/client/dist`](apps/client/dist) (or a copy of that tree).
+2. Copy [`deploy/nginx.conf.example`](deploy/nginx.conf.example) into your nginx sites config; set `server_name`, TLS certs, and paths. It proxies `/api`, `/auth`, `/yjs` (WebSocket), and `/healthz` to the Node API, gzips static assets, long-caches hashed `/assets/` (so GoJS survives frequent client redeploys), and uses `Cache-Control: no-cache` for `index.html` / SPA routes.
+3. Copy [`deploy/systemd/function-planner-api.service.example`](deploy/systemd/function-planner-api.service.example) to `/etc/systemd/system/function-planner-api.service`, adjust user/paths, then `systemctl enable --now function-planner-api`. The client needs no systemd unit.
+
+Production env (server `.env` + unit; register the callback in Google OAuth):
+
+| Variable | Value |
+|----------|--------|
+| `CLIENT_URL` | `https://your.host` |
+| `GOOGLE_CALLBACK_URL` | `https://your.host/auth/google/callback` |
+| `NODE_ENV` | `production` (set in the systemd unit; enables secure session cookies) |
+
 ## Updating the planner UI submodule
 
 UI changes belong in [MoravianUniversity/function-planner-ui](https://github.com/MoravianUniversity/function-planner-ui). In this repo:

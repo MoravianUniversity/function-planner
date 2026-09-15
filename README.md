@@ -132,10 +132,11 @@ Production env (server `.env` + unit; register the callback in Google OAuth):
 
 | Variable | Value |
 |----------|--------|
-| `CLIENT_URL` | `https://your.host` |
+| `CLIENT_URL` | `https://your.host` (exact browser origin; used for CORS and post-login redirect) |
 | `GOOGLE_CALLBACK_URL` | `https://your.host/auth/google/callback` |
 | `NODE_ENV` | `production` (set in the systemd unit; enables secure session cookies) |
 
+Sessions are stored in Postgres via `connect-pg-simple` (table created automatically). The API sets `trust proxy` so secure cookies work when nginx terminates TLS.
 ## Updating the planner UI submodule
 
 UI changes belong in [MoravianUniversity/function-planner-ui](https://github.com/MoravianUniversity/function-planner-ui). In this repo:

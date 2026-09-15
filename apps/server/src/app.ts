@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import cookieParser from 'cookie-parser';
 import passport from './auth/passport.js';
 import authRoutes from './auth/routes.js';
@@ -13,9 +14,15 @@ import collabRoutes from './routes/collab.js';
 
 const app = express();
 
+// Required behind nginx (TLS termination) so secure cookies and req.protocol work.
+app.set('trust proxy', 1);
+
 const allowedOrigins = new Set<string>([
   process.env.CLIENT_URL ?? 'http://localhost:5174',
 ]);
+
+const isProd = process.env.NODE_ENV === 'production';
+const PgSession = connectPgSimple(session);
 
 app.use(
   cors({
@@ -46,9 +53,13 @@ app.use(
     secret: process.env.SESSION_SECRET ?? 'development-only-secret',
     resave: false,
     saveUninitialized: false,
+    store: new PgSession({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: true
+    }),
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd,
       sameSite: 'lax'
     }
   })

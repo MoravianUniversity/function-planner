@@ -7,8 +7,13 @@ export const withBaseUrl = (url: string): string => {
   return `${API_BASE_URL}${url}`;
 };
 
-const maybeRedirectToLogin = (status: number): void => {
+const maybeRedirectToLogin = (status: number, url: string): void => {
   if (status !== 401) {
+    return;
+  }
+
+  // /auth/session intentionally returns 401 when logged out; do not start OAuth from that probe.
+  if (url.includes('/auth/session')) {
     return;
   }
 
@@ -40,7 +45,7 @@ async function parseErrorBody(response: Response): Promise<string | undefined> {
 export async function apiGet<T>(url: string): Promise<T> {
   const response = await fetch(withBaseUrl(url), { credentials: 'include' });
   if (!response.ok) {
-    maybeRedirectToLogin(response.status);
+    maybeRedirectToLogin(response.status, url);
     const detail = await parseErrorBody(response);
     throw new ApiHttpError(response.status, detail ?? `Request failed: ${response.status}`);
   }
@@ -56,7 +61,7 @@ export async function apiSend<T>(url: string, method: 'POST' | 'PATCH', body: un
   });
 
   if (!response.ok) {
-    maybeRedirectToLogin(response.status);
+    maybeRedirectToLogin(response.status, url);
     const detail = await parseErrorBody(response);
     throw new ApiHttpError(response.status, detail ?? `Request failed: ${response.status}`);
   }

@@ -27,7 +27,11 @@ router.get('/failure', (_req, res) => {
 router.post('/logout', (req, res) => {
   req.logout(() => {
     req.session.destroy(() => {
-      res.clearCookie('fp_sid');
+      res.clearCookie('fp_sid', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
       res.status(200).json({ success: true });
     });
   });

@@ -3,7 +3,8 @@
 #
 # Install:
 #   1. Adjust User, Group, WorkingDirectory, and EnvironmentFile for your host
-#      (paths below assume a checkout at /opt/function-planner after `npm run build`)
+#      (paths below assume a checkout at /opt/function-planner after `npm run build`).
+#      tsc emits under dist/src/, so ExecStart is dist/src/index.js.
 #   2. sudo cp deploy/systemd/function-planner-api.service.example \
 #        /etc/systemd/system/function-planner-api.service
 #   3. sudo systemctl daemon-reload
@@ -25,7 +26,7 @@ Group=function-planner
 WorkingDirectory=/opt/function-planner/apps/server
 Environment=NODE_ENV=production
 EnvironmentFile=/opt/function-planner/apps/server/.env
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=/usr/bin/node dist/src/index.js
 Restart=on-failure
 RestartSec=5
 

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,8 +17,23 @@ const DEFAULT_CONFIG: AppConfig = {
   allowedEmailDomains: []
 };
 
+/** Package root (`apps/server`) whether this file is loaded from `src/` or `dist/src/`. */
+function serverPackageRoot(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(here, '..'), // src/config.ts → apps/server
+    resolve(here, '../..') // dist/src/config.js → apps/server
+  ];
+  for (const dir of candidates) {
+    if (existsSync(resolve(dir, 'package.json')) && existsSync(resolve(dir, 'config.example.json'))) {
+      return dir;
+    }
+  }
+  return candidates[0]!;
+}
+
 function loadConfig(): AppConfig {
-  const configPath = resolve(dirname(fileURLToPath(import.meta.url)), '../config.json');
+  const configPath = resolve(serverPackageRoot(), 'config.json');
   try {
     const raw = JSON.parse(readFileSync(configPath, 'utf8')) as Partial<AppConfig>;
     const appName =

@@ -152,6 +152,7 @@ function Shell() {
       return;
     }
     setCourseId(nextCourseId);
+    // Update the URL in the same turn so stale ?courseId= cannot win a race.
     // Plan/editor URLs are course-scoped; leave them when switching courses.
     if (location.pathname.startsWith('/plans')) {
       navigate(hrefForCourse('/', nextCourseId), { replace: true });
@@ -159,7 +160,9 @@ function Shell() {
     }
     if (location.pathname.startsWith('/roster')) {
       navigate(hrefForCourse('/roster', nextCourseId), { replace: true });
+      return;
     }
+    navigate(hrefForCourse(location.pathname, nextCourseId), { replace: true });
   }
 
   async function signInWithDifferentAccount(event: React.MouseEvent<HTMLAnchorElement>): Promise<void> {

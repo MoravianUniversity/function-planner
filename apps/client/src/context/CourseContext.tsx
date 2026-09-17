@@ -19,14 +19,23 @@ export function CourseProvider({ children }: { children: React.ReactNode }) {
   const [defaultCourseId, setDefaultCourseId] = useState<string | null>(null);
   const [courseCount, setCourseCount] = useState(0);
 
-  // URL wins when present (middle-click / shared links / back-forward).
+  // Apply courseId from the URL only when the URL itself changes (middle-click,
+  // shared links, back/forward). Do not re-run on courseId changes — otherwise
+  // selecting the default while ?courseId= still holds the previous course
+  // snaps the selection back before URL sync can strip the param.
   useEffect(() => {
     const fromUrl = searchParams.get('courseId');
-    if (fromUrl && fromUrl !== courseId) {
-      writeStoredCourseId(fromUrl);
-      setCourseIdState(fromUrl);
+    if (!fromUrl) {
+      return;
     }
-  }, [searchParams, courseId]);
+    setCourseIdState((current) => {
+      if (current === fromUrl) {
+        return current;
+      }
+      writeStoredCourseId(fromUrl);
+      return fromUrl;
+    });
+  }, [searchParams]);
 
   const setCourseId = useCallback((nextCourseId: string) => {
     writeStoredCourseId(nextCourseId);

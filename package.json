@@ -12,7 +12,7 @@
     "build": "npm run build -w packages/shared && npm run build -w apps/server && npm run build -w apps/client",
     "dev": "npm run dev -w apps/server",
     "dev-client": "npm run dev -w apps/client",
-    "test": "npm run test -w packages/shared && npm run test -w apps/server && npm run test -w apps/client"
+    "test": "npm run test -w packages/shared && npm run test -w packages/function-planner-ui && npm run test -w apps/server && npm run test -w apps/client"
   },
   "overrides": {
     "yjs": "13.6.30"

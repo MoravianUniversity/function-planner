@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy, faFileImport, faPlus } from '@fortawesome/free-solid-svg-icons';
 import { apiGet } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import type { HomeResponse } from '../../types/api';
 import { ComparePythonDialog } from '../plans/ComparePythonDialog';
 import { CopyPlansDialog } from './CopyPlansDialog';
@@ -11,6 +12,7 @@ import { CreatePlanDialog } from './CreatePlanDialog';
 import { ImportPlansDialog } from './ImportPlansDialog';
 
 export function HomePage({ courseId }: { courseId: string }) {
+  const { coursePath } = useCourseContext();
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
   const [importPlansOpen, setImportPlansOpen] = useState(false);
   const [copyPlansOpen, setCopyPlansOpen] = useState(false);
@@ -70,7 +72,7 @@ export function HomePage({ courseId }: { courseId: string }) {
                     <li key={plan.id} className="app-student-home-plan-row">
                       <Link
                         className="app-plan-row app-plan-row-link"
-                        to={`/plans/${plan.basePlanId}`}
+                        to={coursePath(`/plans/${plan.basePlanId}`)}
                       >
                         <span className="app-plan-title">{plan.title}</span>
                         {withLabel ? <span className="app-plan-with">{withLabel}</span> : null}
@@ -110,7 +112,10 @@ export function HomePage({ courseId }: { courseId: string }) {
             <ul className="app-plan-list">
               {data.studentView.availablePublishedPlans.map((plan) => (
                 <li key={plan.id}>
-                  <Link className="app-plan-row app-plan-row-link app-plan-row--published" to={`/plans/${plan.id}`}>
+                  <Link
+                    className="app-plan-row app-plan-row-link app-plan-row--published"
+                    to={coursePath(`/plans/${plan.id}`)}
+                  >
                     <span className="app-plan-title">{plan.title}</span>
                   </Link>
                 </li>
@@ -158,7 +163,7 @@ export function HomePage({ courseId }: { courseId: string }) {
                   className={
                     plan.published ? 'app-plan-row app-plan-row-link app-plan-row--published' : 'app-plan-row app-plan-row-link app-plan-row--draft'
                   }
-                  to={`/plans/${plan.id}`}
+                  to={coursePath(`/plans/${plan.id}`)}
                 >
                   <span className="app-plan-title">{plan.title}</span>
                   {isInstructor && !plan.published ? <span className="app-plan-status">Unpublished</span> : null}

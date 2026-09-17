@@ -1,4 +1,8 @@
-import { isCourseReadonly, type CourseOption } from '@function-planner/shared';
+import {
+  isCourseReadonly,
+  sortCoursesForDisplay,
+  type CourseOption
+} from '@function-planner/shared';
 import { prisma } from '../lib/prisma.js';
 
 export const listCoursesForUser = async (userId: string): Promise<CourseOption[]> => {
@@ -32,5 +36,5 @@ export const listCoursesForUser = async (userId: string): Promise<CourseOption[]
     });
   }
 
-  return [...byCourse.values()].sort((a, b) => (a.endsAt < b.endsAt ? 1 : -1));
+  return sortCoursesForDisplay([...byCourse.values()]);
 };

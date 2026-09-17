@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChalkboardUser, faPenToSquare } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { apiGet, apiSend } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import type { BasePlanDetail, CoursesResponse } from '../../types/api';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
 import type { PlannerExtraFab } from './useFunctionPlanner';
@@ -27,6 +28,7 @@ interface CollabTicketResponse {
 
 export function BasePlanEditorPage({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
+  const { coursePath } = useCourseContext();
   const { planId: basePlanId } = useParams<{ planId: string }>();
 
   useEffect(() => {
@@ -89,19 +91,19 @@ export function BasePlanEditorPage({ courseId }: { courseId: string }) {
           title: 'Home',
           icon: HOME_ICON,
           onClick: () => {
-            navigate('/');
+            navigate(coursePath('/'));
           }
         },
         {
           title: 'Back to plan',
           icon: LIST_ICON,
           onClick: () => {
-            navigate(`/plans/${basePlanId}`);
+            navigate(coursePath(`/plans/${basePlanId}`));
           }
         }
       ]
     ];
-  }, [basePlanId, navigate]);
+  }, [basePlanId, coursePath, navigate]);
 
   useEffect(() => {
     if (ticketPayload && expectedRoom && ticketPayload.roomSegment !== expectedRoom) {

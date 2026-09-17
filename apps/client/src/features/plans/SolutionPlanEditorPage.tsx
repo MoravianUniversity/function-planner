@@ -10,6 +10,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChalkboardUser, faKey } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { apiGet, apiSend } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import type { BasePlanDetail, CoursesResponse } from '../../types/api';
 import { AppDialog } from '../../components/ui/AppDialog';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
@@ -34,6 +35,7 @@ type StaleChoice = 'pending' | 'skip' | 'resolved';
 
 export function SolutionPlanEditorPage({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
+  const { coursePath } = useCourseContext();
   const qc = useQueryClient();
   const { planId: basePlanId } = useParams<{ planId: string }>();
   const [staleChoice, setStaleChoice] = useState<StaleChoice>('pending');
@@ -151,19 +153,19 @@ export function SolutionPlanEditorPage({ courseId }: { courseId: string }) {
           title: 'Home',
           icon: HOME_ICON,
           onClick: () => {
-            navigate('/');
+            navigate(coursePath('/'));
           }
         },
         {
           title: 'Back to plan',
           icon: LIST_ICON,
           onClick: () => {
-            navigate(`/plans/${basePlanId}`);
+            navigate(coursePath(`/plans/${basePlanId}`));
           }
         }
       ]
     ];
-  }, [basePlanId, navigate]);
+  }, [basePlanId, coursePath, navigate]);
 
   useEffect(() => {
     if (ticketPayload && expectedRoom && ticketPayload.roomSegment !== expectedRoom) {

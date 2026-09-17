@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createCourseSchema, updateCourseSchema } from '@function-planner/shared';
+import { createCourseSchema, pickDefaultCourseId, updateCourseSchema } from '@function-planner/shared';
 import { mintCourseApiJwt } from '../auth/apiJwt.js';
 import { requireAuth, loadCourseContext, requireRole } from '../middleware/auth.js';
 import { listCoursesForUser } from '../services/courseService.js';
@@ -13,7 +13,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const courses = await listCoursesForUser(userId);
     res.json({
       courses,
-      defaultCourseId: courses[0]?.id ?? null
+      defaultCourseId: pickDefaultCourseId(courses)
     });
   } catch (error) {
     next(error);

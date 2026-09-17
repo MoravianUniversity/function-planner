@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes, useMatch, useParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPenToSquare, faPlus, faUsers } from '@fortawesome/free-solid-svg-icons';
@@ -7,6 +7,7 @@ import type { PlanEntryResponse } from '@function-planner/shared';
 import { CourseProvider, useCourseContext } from './context/CourseContext';
 import { apiGet, apiSend, withBaseUrl } from './api/client';
 import { CourseSwitcher } from './components/CourseSwitcher';
+import { courseHref } from './lib/courseHref';
 import type { CoursesResponse, PublicAppConfig, SessionResponse } from './types/api';
 import { HomePage } from './features/home/HomePage';
 import { RosterPage } from './features/roster/RosterPage';
@@ -38,7 +39,9 @@ function useAppTheme(): AppTheme {
 }
 
 function Shell() {
-  const { courseId, setCourseId } = useCourseContext();
+  const { courseId, setCourseId, setCourseMeta, coursePath } = useCourseContext();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [editCourseOpen, setEditCourseOpen] = useState(false);
   const [createCourseOpen, setCreateCourseOpen] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
@@ -63,10 +66,54 @@ function Shell() {
   });
 
   useEffect(() => {
-    if (!courseId && data?.defaultCourseId) {
+    if (!data) {
+      return;
+    }
+    setCourseMeta({
+      defaultCourseId: data.defaultCourseId,
+      courseCount: data.courses.length
+    });
+  }, [data, setCourseMeta]);
+
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+    const enrolled = new Set(data.courses.map((course) => course.id));
+    if (courseId && enrolled.has(courseId)) {
+      return;
+    }
+    if (data.defaultCourseId) {
       setCourseId(data.defaultCourseId);
     }
-  }, [courseId, data?.defaultCourseId, setCourseId]);
+  }, [courseId, data, setCourseId]);
+
+  // Keep ?courseId= in sync only when it would change the automatic default.
+  useEffect(() => {
+    if (!courseId || !data) {
+      return;
+    }
+    const params = new URLSearchParams(location.search);
+    const urlCourseId = params.get('courseId');
+    const shouldHaveParam =
+      data.courses.length > 1 && Boolean(data.defaultCourseId) && courseId !== data.defaultCourseId;
+
+    if (shouldHaveParam) {
+      if (urlCourseId === courseId) {
+        return;
+      }
+      params.set('courseId', courseId);
+      const search = params.toString();
+      navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true });
+      return;
+    }
+
+    if (urlCourseId) {
+      params.delete('courseId');
+      const search = params.toString();
+      navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true });
+    }
+  }, [courseId, data, location.pathname, location.search, navigate]);
 
   const rosterMatch = useMatch('/roster');
   const plansShellMatch = useMatch('/plans/:planId/*');
@@ -91,6 +138,29 @@ function Shell() {
   useEffect(() => {
     document.title = appHeading ? `${appName}: ${appHeading}` : appName;
   }, [appHeading, appName]);
+
+  function hrefForCourse(path: string, nextCourseId: string): string {
+    return courseHref(path, {
+      courseId: nextCourseId,
+      defaultCourseId: data?.defaultCourseId ?? null,
+      courseCount: data?.courses.length ?? 0
+    });
+  }
+
+  function selectCourse(nextCourseId: string): void {
+    if (nextCourseId === courseId) {
+      return;
+    }
+    setCourseId(nextCourseId);
+    // Plan/editor URLs are course-scoped; leave them when switching courses.
+    if (location.pathname.startsWith('/plans')) {
+      navigate(hrefForCourse('/', nextCourseId), { replace: true });
+      return;
+    }
+    if (location.pathname.startsWith('/roster')) {
+      navigate(hrefForCourse('/roster', nextCourseId), { replace: true });
+    }
+  }
 
   async function signInWithDifferentAccount(event: React.MouseEvent<HTMLAnchorElement>): Promise<void> {
     event.preventDefault();
@@ -141,16 +211,16 @@ function Shell() {
     <div>
       <div id="app-header">
       <h1 id="app-title">
-          <Link to="/">{appName}</Link>{appHeading ? `: ${appHeading}` : ''}
+          <Link to={coursePath('/')}>{appName}</Link>{appHeading ? `: ${appHeading}` : ''}
         </h1>
         <div id="app-toolbar" className="app-toolbar">
-          <CourseSwitcher courses={data.courses} selectedCourseId={courseId} onSelect={setCourseId} />
+          <CourseSwitcher courses={data.courses} selectedCourseId={courseId} onSelect={selectCourse} />
           {canManageCourse ? (
             <>
               <button type="button" className="app-btn" onClick={() => setEditCourseOpen(true)} aria-label="Edit course" title="Edit course">
                 <FontAwesomeIcon icon={faPenToSquare} />
               </button>
-              <Link className="app-btn" to="/roster" aria-label="View roster" title="View roster">
+              <Link className="app-btn" to={coursePath('/roster')} aria-label="View roster" title="View roster">
                 <FontAwesomeIcon icon={faUsers} />
               </Link>
               <button type="button" className="app-btn" onClick={() => setCreateCourseOpen(true)} aria-label="Add course" title="Add course">
@@ -160,7 +230,10 @@ function Shell() {
               <CreateCourseDialog
                 open={createCourseOpen}
                 onOpenChange={setCreateCourseOpen}
-                onCreatedCourse={(id) => setCourseId(id)}
+                onCreatedCourse={(id) => {
+                  setCourseId(id);
+                  navigate('/');
+                }}
               />
             </>
           ) : null}
@@ -173,7 +246,7 @@ function Shell() {
         <Route path="/plans/:planId/edit" element={<BasePlanEditRoute courseId={courseId} />} />
         <Route path="/plans/:planId/solution" element={<SolutionPlanRoute courseId={courseId} />} />
         <Route path="/plans/:planId" element={<UnifiedPlanPage courseId={courseId} />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={coursePath('/')} replace />} />
       </Routes>
     </div>
   );
@@ -181,16 +254,18 @@ function Shell() {
 
 function BasePlanEditRoute({ courseId }: { courseId: string }) {
   const { planId } = useParams<{ planId: string }>();
+  const { coursePath } = useCourseContext();
   if (!planId) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={coursePath('/')} replace />;
   }
   return <BasePlanEditorPage courseId={courseId} />;
 }
 
 function SolutionPlanRoute({ courseId }: { courseId: string }) {
   const { planId } = useParams<{ planId: string }>();
+  const { coursePath } = useCourseContext();
   if (!planId) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={coursePath('/')} replace />;
   }
   return <SolutionPlanEditorPage courseId={courseId} />;
 }

@@ -15,6 +15,7 @@ import {
   faRotate
 } from '@fortawesome/free-solid-svg-icons';
 import { apiGet, apiSend } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import { AddMemberDialog } from './AddMemberDialog';
 import { ImportStudentsDialog } from './ImportStudentsDialog';
 import { Link } from 'react-router-dom';
@@ -201,6 +202,7 @@ function ApiTokenSection({ courseId }: { courseId: string }) {
 }
 
 export function RosterPage({ courseId }: { courseId: string }) {
+  const { coursePath } = useCourseContext();
   const [message, setMessage] = useState<string>('');
   const [addRole, setAddRole] = useState<'INSTRUCTOR' | 'TA' | 'STUDENT' | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -230,7 +232,7 @@ export function RosterPage({ courseId }: { courseId: string }) {
 
   return (
     <div>
-      <Link to="/" className="app-link-back">
+      <Link to={coursePath('/')} className="app-link-back">
         <FontAwesomeIcon icon={faArrowLeft} />
         Back to home
       </Link>

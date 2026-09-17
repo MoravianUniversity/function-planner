@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faChalkboardUser, faCheck, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { apiGet, apiSend, ApiHttpError } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import type { CoursesResponse } from '../../types/api';
 import { AppDialog } from '../../components/ui/AppDialog';
 import { ComparePythonDialog } from './ComparePythonDialog';
@@ -64,6 +65,7 @@ interface StudentPlanDetails {
 
 export function PlanPage({ courseId, planId }: { courseId: string; planId: string }) {
   const navigate = useNavigate();
+  const { coursePath } = useCourseContext();
   const qc = useQueryClient();
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -196,7 +198,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ['home', courseId] });
       void qc.invalidateQueries({ queryKey: ['plan-entry', courseId, result.basePlanId] });
-      navigate(`/plans/${result.basePlanId}`, { replace: true });
+      navigate(coursePath(`/plans/${result.basePlanId}`), { replace: true });
     },
     onError: (err: Error) => {
       toast.error(err.message || 'Could not leave plan.');
@@ -215,7 +217,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         title: 'Home',
         icon: HOME_ICON,
         onClick: () => {
-          navigate('/');
+          navigate(coursePath('/'));
         }
       }
     ];
@@ -233,7 +235,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         title: 'Back to plan list',
         icon: LIST_ICON,
         onClick: () => {
-          navigate(`/plans/${basePlanId}`);
+          navigate(coursePath(`/plans/${basePlanId}`));
         }
       });
       if (compareEmails.length > 0) {
@@ -247,14 +249,14 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
       }
     }
     return [group];
-  }, [isMember, basePlanId, compareEmails.length, courseReadonly, leaveMutation.isPending, navigate]);
+  }, [isMember, basePlanId, compareEmails.length, courseReadonly, coursePath, leaveMutation.isPending, navigate]);
 
   const isLastMember = (plan?.members.length ?? 0) <= 1;
   const pendingRequest = joinRequests?.requests[0];
 
   if (isError && planError instanceof ApiHttpError && planError.status === 404) {
     const msg = planError.message || 'Plan not found.';
-    const backToAssignment = plan?.basePlanId ? `/plans/${plan.basePlanId}` : null;
+    const backToAssignment = plan?.basePlanId ? coursePath(`/plans/${plan.basePlanId}`) : null;
     return (
       <div className="app-planner-fallback">
         <p className="app-error">{msg}</p>
@@ -267,7 +269,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
           </p>
         ) : null}
         <p>
-          <Link className="app-link-back" to="/">
+          <Link className="app-link-back" to={coursePath('/')}>
             <FontAwesomeIcon icon={faArrowLeft} /> Back to all plans
           </Link>
         </p>

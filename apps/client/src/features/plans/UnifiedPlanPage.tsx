@@ -4,12 +4,14 @@ import type { PlanEntryResponse } from '@function-planner/shared';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import { apiGet, ApiHttpError } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import { PlanPage } from './PlanPage';
 import { BasePlanManagePage } from './BasePlanManagePage';
 import { StartJoinPage } from '../home/StartJoinPage';
 
 export function UnifiedPlanPage({ courseId }: { courseId: string }) {
   const { planId } = useParams<{ planId: string }>();
+  const { coursePath } = useCourseContext();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['plan-entry', courseId, planId],
@@ -34,7 +36,7 @@ export function UnifiedPlanPage({ courseId }: { courseId: string }) {
       <div>
         <p className="app-error">{msg}</p>
         <p>
-          <Link className="app-link-back" to="/">
+          <Link className="app-link-back" to={coursePath('/')}>
             <FontAwesomeIcon icon={faArrowLeft} /> Back to all plans
           </Link>
         </p>

@@ -23,6 +23,7 @@ import {
   type ReturnFacet
 } from '@function-planner/shared';
 import { apiGet, apiSend } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import type { BasePlanDetail, CoursesResponse, StaffStudentPlanRow } from '../../types/api';
 import { ComparePythonDialog } from './ComparePythonDialog';
 
@@ -127,6 +128,7 @@ export function BasePlanManagePage({
   courseId: string;
   basePlanId: string;
 }) {
+  const { coursePath } = useCourseContext();
   const qc = useQueryClient();
   const [title, setTitle] = useState('');
   const [allowedTypesText, setAllowedTypesText] = useState(DEFAULT_PLAN_CONFIG.allowedTypes.join(', '));
@@ -347,7 +349,7 @@ export function BasePlanManagePage({
   }
 
   async function copyStudentPlanUrl(planId: string) {
-    const relativePath = `/plans/${planId}`;
+    const relativePath = coursePath(`/plans/${planId}`);
     const absoluteUrl =
       typeof window === 'undefined' ? relativePath : `${window.location.origin}${relativePath}`;
     try {
@@ -378,7 +380,7 @@ export function BasePlanManagePage({
   }
 
   if (!selected || !isStaff) {
-    return <p>Instructor or TA access is required for this page. <Link to="/">Home</Link></p>;
+    return <p>Instructor or TA access is required for this page. <Link to={coursePath('/')}>Home</Link></p>;
   }
 
   if (isLoading && !basePlan) {
@@ -391,7 +393,7 @@ export function BasePlanManagePage({
 
   return (
     <div className="app-manage-plan">
-      <Link to="/" className="app-link-back"><FontAwesomeIcon icon={faArrowLeft} />Back to home</Link>
+      <Link to={coursePath('/')} className="app-link-back"><FontAwesomeIcon icon={faArrowLeft} />Back to home</Link>
       <div className="app-toolbar">
         {basePlan.published ? (
           <button type="button" className="app-btn app-btn-primary" onClick={() => copyStudentPlanUrl(basePlan.id)} title="Copy published URL" aria-label="Copy published URL">
@@ -412,11 +414,11 @@ export function BasePlanManagePage({
         <button type="button" className={`app-btn ${configExpanded ? 'app-btn-primary' : ''}`} onClick={() => setConfigExpanded((open) => !open)}>
           <FontAwesomeIcon icon={faGear} /> Configure
         </button>
-        <Link to={`/plans/${basePlan.id}/edit`} className="app-btn">
+        <Link to={coursePath(`/plans/${basePlan.id}/edit`)} className="app-btn">
           <FontAwesomeIcon icon={faPenToSquare} /> {canEditPlan ? 'Edit' : 'View'}
         </Link>
         <Link
-          to={`/plans/${basePlan.id}/solution`}
+          to={coursePath(`/plans/${basePlan.id}/solution`)}
           className="app-btn"
           title={basePlan.solutionStale ? 'Solution may be out of date with the template' : undefined}
         >
@@ -1035,7 +1037,7 @@ export function BasePlanManagePage({
               return (
                 <li key={row.id} className="app-student-instance-row">
                   <div className="app-student-instance-main">
-                    <Link to={`/plans/${row.id}`}>{label}</Link>
+                    <Link to={coursePath(`/plans/${row.id}`)}>{label}</Link>
                   </div>
                   <button
                     type="button"

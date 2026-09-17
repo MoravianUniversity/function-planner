@@ -5,6 +5,7 @@ import type { JoinableStudentPlansResponse, MyJoinRequestStatus } from '@functio
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faPlayCircle, faUsers } from '@fortawesome/free-solid-svg-icons';
 import { apiGet, apiSend } from '../../api/client';
+import { useCourseContext } from '../../context/CourseContext';
 import type { HomeResponse } from '../../types/api';
 
 export function StartJoinPage({
@@ -17,6 +18,7 @@ export function StartJoinPage({
   initialTitle?: string;
 }) {
   const navigate = useNavigate();
+  const { coursePath } = useCourseContext();
   const qc = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [waitingPlanId, setWaitingPlanId] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export function StartJoinPage({
       setWaitingPlanId(null);
       void qc.invalidateQueries({ queryKey: ['home', courseId] });
       void qc.invalidateQueries({ queryKey: ['plan-entry', courseId, basePlanId] });
-      navigate(`/plans/${basePlanId}`, { replace: true });
+      navigate(coursePath(`/plans/${basePlanId}`), { replace: true });
       return;
     }
     if (myRequest.status === 'rejected') {
@@ -69,7 +71,7 @@ export function StartJoinPage({
     if (myRequest.status === 'pending') {
       setWaitingPlanId(myRequest.studentPlanId);
     }
-  }, [myRequest, navigate, qc, courseId, basePlanId]);
+  }, [myRequest, navigate, qc, courseId, basePlanId, coursePath]);
 
   const startMutation = useMutation({
     mutationFn: () =>
@@ -80,7 +82,7 @@ export function StartJoinPage({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['home', courseId] });
       void qc.invalidateQueries({ queryKey: ['plan-entry', courseId, basePlanId] });
-      navigate(`/plans/${basePlanId}`, { replace: true });
+      navigate(coursePath(`/plans/${basePlanId}`), { replace: true });
     },
     onError: (err: Error) => setMessage(err.message)
   });
@@ -104,7 +106,7 @@ export function StartJoinPage({
     return (
       <div>
         <p>You already have a plan for this assignment.</p>
-        <Link className="app-btn app-btn-primary" to={`/plans/${existing.basePlanId}`}>
+        <Link className="app-btn app-btn-primary" to={coursePath(`/plans/${existing.basePlanId}`)}>
           Open your plan
         </Link>
       </div>
@@ -116,7 +118,7 @@ export function StartJoinPage({
   return (
     <div>
       <p>
-        <Link className="app-link-back" to="/">
+        <Link className="app-link-back" to={coursePath('/')}>
           <FontAwesomeIcon icon={faArrowLeft} /> Back to home
         </Link>
       </p>

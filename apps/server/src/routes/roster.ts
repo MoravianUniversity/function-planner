@@ -72,16 +72,29 @@ router.get('/', requireAuth, loadCourseContext, requireRole('INSTRUCTOR'), async
   try {
     const { courseId } = res.locals.auth;
     const currentUserId = (res.locals.auth.user as { id: string }).id;
-    const enrollments = await prisma.enrollment.findMany({
-      where: { courseId },
-      include: { user: true },
-      orderBy: [{ role: 'asc' }, { user: { lastName: 'asc' } }]
-    });
+    const [enrollments, planMemberships] = await Promise.all([
+      prisma.enrollment.findMany({
+        where: { courseId },
+        include: { user: true },
+        orderBy: [{ role: 'asc' }, { user: { lastName: 'asc' } }]
+      }),
+      prisma.studentPlanMember.findMany({
+        where: { studentPlan: { courseId } },
+        select: { userId: true },
+        distinct: ['userId']
+      })
+    ]);
+
+    const inPlanUserIds = new Set(planMemberships.map((m) => m.userId));
+    const withPlanFlag = enrollments.map((e) => ({
+      ...e,
+      inPlan: inPlanUserIds.has(e.userId)
+    }));
 
     const grouped = {
-      INSTRUCTOR: enrollments.filter((e: { role: string }) => e.role === 'INSTRUCTOR'),
-      TA: enrollments.filter((e: { role: string }) => e.role === 'TA'),
-      STUDENT: enrollments.filter((e: { role: string }) => e.role === 'STUDENT')
+      INSTRUCTOR: withPlanFlag.filter((e: { role: string }) => e.role === 'INSTRUCTOR'),
+      TA: withPlanFlag.filter((e: { role: string }) => e.role === 'TA'),
+      STUDENT: withPlanFlag.filter((e: { role: string }) => e.role === 'STUDENT')
     };
 
     res.json({ ...grouped, currentUserId });
@@ -174,6 +187,43 @@ router.patch('/:enrollmentId', requireAuth, loadCourseContext, requireRole('INST
       data: { enabled }
     });
     res.json(enrollment);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:enrollmentId', requireAuth, loadCourseContext, requireRole('INSTRUCTOR'), async (req, res, next) => {
+  try {
+    const actorUserId = (res.locals.auth.user as { id: string }).id;
+    const courseId = res.locals.auth.courseId;
+    const enrollmentId = String(req.params.enrollmentId);
+    const existing = await prisma.enrollment.findUnique({ where: { id: enrollmentId } });
+    if (!existing || existing.courseId !== courseId) {
+      return res.status(404).json({ message: 'Enrollment not found for this course.' });
+    }
+    if (existing.userId === actorUserId) {
+      return res.status(400).json({ message: 'You cannot delete your own enrollment.' });
+    }
+
+    if (existing.role === 'STUDENT') {
+      if (existing.enabled) {
+        return res.status(400).json({
+          message: 'Students must be disabled before they can be deleted.'
+        });
+      }
+      const planMembership = await prisma.studentPlanMember.findFirst({
+        where: { userId: existing.userId, studentPlan: { courseId } },
+        select: { id: true }
+      });
+      if (planMembership) {
+        return res.status(400).json({
+          message: 'This student is still a member of a plan and cannot be deleted.'
+        });
+      }
+    }
+
+    await prisma.enrollment.delete({ where: { id: enrollmentId } });
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

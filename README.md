@@ -17,7 +17,7 @@ The planner UI (diagram, function model, config-driven checking) lives in the [`
 
 - Google OAuth sign-in (Passport) and cookie sessions
 - Courses with instructor / TA / student enrollments; course becomes **readonly** after `endsAt`
-- Roster: add members, CSV student import, enable/disable enrollments
+- Roster: add members, CSV student import, enable/disable enrollments; delete instructors/TAs; delete disabled students who are not on a plan
 - Base plans: create, import from another course you instruct, title/settings, publish (cannot unpublish)
 - Base-plan **settings** JSON mapped into the planner `init` options (allowed types, mins, claim/call-graph, doc style, etc.)
 - **Yjs persistence** to Postgres (`yjsState`; map-based docs also refresh `content` JSON for seeding)

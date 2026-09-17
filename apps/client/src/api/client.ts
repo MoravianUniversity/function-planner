@@ -52,12 +52,21 @@ export async function apiGet<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function apiSend<T>(url: string, method: 'POST' | 'PATCH', body: unknown): Promise<T> {
+export async function apiSend<T>(
+  url: string,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body?: unknown
+): Promise<T> {
+  const hasBody = body !== undefined;
   const response = await fetch(withBaseUrl(url), {
     method,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    ...(hasBody
+      ? {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        }
+      : {})
   });
 
   if (!response.ok) {

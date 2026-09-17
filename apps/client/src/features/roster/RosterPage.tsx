@@ -12,7 +12,8 @@ import {
   faCopy,
   faCheck,
   faXmark,
-  faRotate
+  faRotate,
+  faTrash
 } from '@fortawesome/free-solid-svg-icons';
 import { apiGet, apiSend } from '../../api/client';
 import { useCourseContext } from '../../context/CourseContext';
@@ -25,6 +26,7 @@ interface EnrollmentRow {
   userId: string;
   role: string;
   enabled: boolean;
+  inPlan: boolean;
   user: {
     firstName: string;
     lastName: string;
@@ -222,6 +224,35 @@ export function RosterPage({ courseId }: { courseId: string }) {
     onError: (mutationError: Error) => setMessage(mutationError.message)
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (enrollmentId: string) =>
+      apiSend(`/api/roster/${enrollmentId}?courseId=${courseId}`, 'DELETE'),
+    onSuccess: () => {
+      setMessage('');
+      queryClient.invalidateQueries({ queryKey: ['roster', courseId] });
+    },
+    onError: (mutationError: Error) => setMessage(mutationError.message)
+  });
+
+  const canDeleteEnrollment = (role: 'INSTRUCTOR' | 'TA' | 'STUDENT', entry: EnrollmentRow) => {
+    if (entry.userId === data?.currentUserId) {
+      return false;
+    }
+    if (role === 'INSTRUCTOR' || role === 'TA') {
+      return true;
+    }
+    return !entry.enabled && !entry.inPlan;
+  };
+
+  const onDeleteEnrollment = (entry: EnrollmentRow) => {
+    const label =
+      `${entry.user.firstName} ${entry.user.lastName}`.trim() || entry.user.email;
+    if (!window.confirm(`Remove ${label} from this course roster?`)) {
+      return;
+    }
+    deleteMutation.mutate(entry.id);
+  };
+
   if (isError) {
     return <p>Failed to load roster: {(error as Error).message}</p>;
   }
@@ -277,20 +308,34 @@ export function RosterPage({ courseId }: { courseId: string }) {
           <ul className="app-roster-list">
             {data[role].map((entry) => {
               const displayName = `${entry.user.firstName} ${entry.user.lastName}`.trim();
+              const showToggle = !(role === 'INSTRUCTOR' && entry.userId === data.currentUserId);
+              const showDelete = canDeleteEnrollment(role, entry);
               return (
               <li key={entry.id} className={entry.enabled ? '' : 'app-disabled'}>
-                {!(role === 'INSTRUCTOR' && entry.userId === data.currentUserId) ? (
+                {showToggle ? (
                   <button
                     type="button"
                     className="app-btn"
                     onClick={() =>
                       toggleMutation.mutate({ enrollmentId: entry.id, enabled: !entry.enabled })
                     }
-                    disabled={toggleMutation.isPending}
+                    disabled={toggleMutation.isPending || deleteMutation.isPending}
                     aria-label={entry.enabled ? 'Disable member' : 'Enable member'}
                     title={entry.enabled ? 'Disable member' : 'Enable member'}
                   >
                     <FontAwesomeIcon icon={entry.enabled ? faUserCheck : faUserSlash} />
+                  </button>
+                ) : null}
+                {showDelete ? (
+                  <button
+                    type="button"
+                    className="app-btn"
+                    onClick={() => onDeleteEnrollment(entry)}
+                    disabled={toggleMutation.isPending || deleteMutation.isPending}
+                    aria-label="Delete member"
+                    title="Delete member"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
                   </button>
                 ) : null}
                 {displayName ? `${displayName} - ${entry.user.email}` : entry.user.email}

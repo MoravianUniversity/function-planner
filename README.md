@@ -96,7 +96,7 @@ Planner docs (student and base) use Yjs maps (`modelData`, `functions`, `calls`)
 
    Prompts for instructor name/email and course metadata. Use the same email you will sign in with via Google.
 
-   For non-destructive schema updates during development: `npx prisma db push` from `apps/server`.
+   Schema changes in development: edit `schema.prisma`, then `npm run prisma:migrate -w apps/server` (creates/applies a migration). Prefer that over `db push` so migration history stays in sync.
 
 4. Start the API (port **3000**, includes `/yjs` WebSocket upgrades):
 
@@ -153,8 +153,9 @@ git commit -m "Bump function-planner-ui submodule"
 
 | Script | Where | Purpose |
 |--------|--------|---------|
-| `npm run prisma:setup -w apps/server` | server | `prisma generate` + `db push --force-reset` + seed (**wipes data**) |
-| `npm run prisma:migrate -w apps/server` | server | Incremental migrations during development |
+| `npm run prisma:setup -w apps/server` | server | `prisma generate` + `migrate reset` + seed (**wipes data**) |
+| `npm run prisma:migrate -w apps/server` | server | Create/apply migrations during development (`migrate dev`) |
+| `npm run prisma:deploy -w apps/server` | server | Apply pending migrations in production (`migrate deploy`) |
 | `npm run prisma:seed -w apps/server` | server | Seed only |
 | `npm run build` | root | Build shared → server → client |
 | `npm test` | root | Workspace tests (currently minimal) |

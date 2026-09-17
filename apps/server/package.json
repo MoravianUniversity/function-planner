@@ -9,9 +9,10 @@
     "start": "node dist/src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:init": "prisma db push --force-reset",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:init": "prisma migrate reset --force",
     "prisma:seed": "tsx prisma/seed.ts",
-    "prisma:setup": "npm run prisma:generate && npm run prisma:init && npm run prisma:seed",
+    "prisma:setup": "npm run prisma:generate && npm run prisma:init",
     "test": "vitest run"
   },
   "dependencies": {

@@ -35,13 +35,29 @@ if (clientId && clientSecret) {
             return done(new Error(`Sign-in is limited to these email domains: ${allowed}.`));
           }
 
-          const firstName = profile.name?.givenName || 'Unknown';
-          const lastName = profile.name?.familyName || 'Unknown';
-          const user = await prisma.user.upsert({
-            where: { email },
-            update: { googleSub: profile.id, firstName, lastName, enabled: true },
-            create: { email, googleSub: profile.id, firstName, lastName }
-          });
+          const oauthFirstName = profile.name?.givenName?.trim() || '';
+          const oauthLastName = profile.name?.familyName?.trim() || '';
+
+          const existing = await prisma.user.findUnique({ where: { email } });
+          const user = existing
+            ? await prisma.user.update({
+                where: { email },
+                data: {
+                  googleSub: profile.id,
+                  enabled: true,
+                  // Fill names from OAuth only when the roster left them empty.
+                  ...(!existing.firstName.trim() && oauthFirstName ? { firstName: oauthFirstName } : {}),
+                  ...(!existing.lastName.trim() && oauthLastName ? { lastName: oauthLastName } : {})
+                }
+              })
+            : await prisma.user.create({
+                data: {
+                  email,
+                  googleSub: profile.id,
+                  firstName: oauthFirstName || 'Unknown',
+                  lastName: oauthLastName || 'Unknown'
+                }
+              });
 
           return done(null, {
             id: user.id,

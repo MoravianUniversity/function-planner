@@ -273,7 +273,9 @@ export function RosterPage({ courseId }: { courseId: string }) {
             ) : null}
           </div>
           <ul className="app-roster-list">
-            {data[role].map((entry) => (
+            {data[role].map((entry) => {
+              const displayName = `${entry.user.firstName} ${entry.user.lastName}`.trim();
+              return (
               <li key={entry.id} className={entry.enabled ? '' : 'app-disabled'}>
                 {!(role === 'INSTRUCTOR' && entry.userId === data.currentUserId) ? (
                   <button
@@ -289,9 +291,10 @@ export function RosterPage({ courseId }: { courseId: string }) {
                     <FontAwesomeIcon icon={entry.enabled ? faUserCheck : faUserSlash} />
                   </button>
                 ) : null}
-                {entry.user.firstName} {entry.user.lastName} - {entry.user.email}
+                {displayName ? `${displayName} - ${entry.user.email}` : entry.user.email}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       ))}

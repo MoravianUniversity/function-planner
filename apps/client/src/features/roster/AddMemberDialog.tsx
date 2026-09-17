@@ -79,12 +79,12 @@ export function AddMemberDialog({ courseId, role, open, onOpenChange }: Props) {
       {message ? <p>{message}</p> : null}
       <form className="app-dialog-form" onSubmit={submit}>
         <label>
-          First name
-          <input name="firstName" required />
+          First name (optional)
+          <input name="firstName" />
         </label>
         <label>
-          Last name
-          <input name="lastName" required />
+          Last name (optional)
+          <input name="lastName" />
         </label>
         <label>
           Email

@@ -39,7 +39,7 @@ export function ImportStudentsDialog({ courseId, open, onOpenChange }: Props) {
       open={open}
       onOpenChange={onOpenChange}
       title="Import students"
-      description="CSV with columns last,first,email"
+      description="CSV columns: last, first, email. Only email is required; names are optional. Headers are optional; if included, they can be in any order."
     >
       {message ? <p>{message}</p> : null}
       <textarea className="app-textarea-fluid" value={csvText} onChange={(e) => setCsvText(e.target.value)} rows={10} />

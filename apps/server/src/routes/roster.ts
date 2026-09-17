@@ -6,6 +6,68 @@ import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
+function normalizeCsvHeader(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function looksLikeEmailAddress(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function csvRowLooksLikeHeaders(cells: string[]): boolean {
+  const normalized = cells.map(normalizeCsvHeader);
+  const hasEmailHeader = normalized.includes('email');
+  const hasEmailValue = cells.some(looksLikeEmailAddress);
+  // Headers if an "email" column label is present and the row is not itself a data row.
+  return hasEmailHeader && !hasEmailValue;
+}
+
+function nameUpdateFromProvided(firstName: string, lastName: string): { firstName?: string; lastName?: string } {
+  // Do not wipe existing names when the roster add/import leaves them blank.
+  return {
+    ...(firstName.trim() ? { firstName: firstName.trim() } : {}),
+    ...(lastName.trim() ? { lastName: lastName.trim() } : {})
+  };
+}
+
+function parseCsvStudentRows(csv: string): Array<{ firstName: string; lastName: string; email: string }> {
+  const rows: string[][] = parse(csv, {
+    columns: false,
+    skip_empty_lines: true,
+    trim: true,
+    relax_column_count: true
+  });
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  if (csvRowLooksLikeHeaders(rows[0])) {
+    const headers = rows[0].map(normalizeCsvHeader);
+    const emailIdx = headers.findIndex((h) => h === 'email');
+    const firstIdx = headers.findIndex((h) => h === 'first' || h === 'firstname');
+    const lastIdx = headers.findIndex((h) => h === 'last' || h === 'lastname');
+
+    return rows.slice(1).map((cells) => ({
+      lastName: lastIdx >= 0 ? (cells[lastIdx] ?? '') : '',
+      firstName: firstIdx >= 0 ? (cells[firstIdx] ?? '') : '',
+      email: emailIdx >= 0 ? (cells[emailIdx] ?? '') : ''
+    }));
+  }
+
+  // Headerless: last,first,email — or a single email column.
+  return rows.map((cells) => {
+    if (cells.length === 1) {
+      return { lastName: '', firstName: '', email: cells[0] ?? '' };
+    }
+    return {
+      lastName: cells[0] ?? '',
+      firstName: cells[1] ?? '',
+      email: cells[2] ?? ''
+    };
+  });
+}
+
 router.get('/', requireAuth, loadCourseContext, requireRole('INSTRUCTOR'), async (_req, res, next) => {
   try {
     const { courseId } = res.locals.auth;
@@ -33,18 +95,19 @@ router.post('/', requireAuth, loadCourseContext, requireRole('INSTRUCTOR'), asyn
     const parsed = addRosterMemberSchema.parse(req.body);
     const { courseId } = res.locals.auth;
     const assignment = parsed.instructorAssignment ?? 'CURRENT_COURSE';
+    const firstName = parsed.firstName.trim();
+    const lastName = parsed.lastName.trim();
 
     const user = await prisma.user.upsert({
       where: { email: parsed.email.toLowerCase() },
       update: {
-        firstName: parsed.firstName,
-        lastName: parsed.lastName,
+        ...nameUpdateFromProvided(firstName, lastName),
         enabled: true
       },
       create: {
         email: parsed.email.toLowerCase(),
-        firstName: parsed.firstName,
-        lastName: parsed.lastName,
+        firstName,
+        lastName,
         enabled: true
       }
     });
@@ -120,41 +183,35 @@ router.post('/import-csv', requireAuth, loadCourseContext, requireRole('INSTRUCT
   try {
     const { courseId } = res.locals.auth;
     const csv = typeof req.body.csv === 'string' ? req.body.csv : '';
-    const records: unknown[] = parse(csv, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true
-    });
+    const records = parseCsvStudentRows(csv);
 
     let imported = 0;
     const errors: string[] = [];
 
     for (const record of records) {
-      const row = record as Record<string, string>;
-      const normalized = {
-        // Support both firstName/lastName/email and first/last/email headers.
-        firstName: row.firstName ?? row.first,
-        lastName: row.lastName ?? row.last,
-        email: row.email
-      };
-
-      const result = csvStudentSchema.safeParse(normalized);
+      const result = csvStudentSchema.safeParse({
+        firstName: record.firstName ?? '',
+        lastName: record.lastName ?? '',
+        email: record.email
+      });
       if (!result.success) {
-        errors.push(`Invalid row for email ${(record as Record<string, string>).email ?? 'unknown'}`);
+        errors.push(`Invalid row for email ${record.email || 'unknown'}`);
         continue;
       }
+
+      const firstName = result.data.firstName.trim();
+      const lastName = result.data.lastName.trim();
 
       const user = await prisma.user.upsert({
         where: { email: result.data.email.toLowerCase() },
         update: {
-          firstName: result.data.firstName,
-          lastName: result.data.lastName,
+          ...nameUpdateFromProvided(firstName, lastName),
           enabled: true
         },
         create: {
           email: result.data.email.toLowerCase(),
-          firstName: result.data.firstName,
-          lastName: result.data.lastName,
+          firstName,
+          lastName,
           enabled: true
         }
       });

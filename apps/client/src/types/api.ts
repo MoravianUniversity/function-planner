@@ -58,5 +58,7 @@ export interface StaffStudentPlanRow {
   id: string;
   title: string;
   basePlanId: string;
-  members: { user: { firstName: string; lastName: string; email: string } }[];
+  /** True when at least one student member is currently connected to the plan. */
+  active: boolean;
+  members: { user: { firstName: string; lastName: string; email: string }; active: boolean }[];
 }

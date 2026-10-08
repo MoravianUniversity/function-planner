@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft, faCheck, faCopy, faGear, faXmark, faCircleCheck, faPenToSquare, faKey } from '@fortawesome/free-solid-svg-icons';
@@ -183,8 +183,22 @@ export function BasePlanManagePage({
   const { data: instances = [], isLoading: instancesLoading } = useQuery({
     queryKey: ['student-plans', courseId, basePlanId],
     queryFn: () =>
-      apiGet<StaffStudentPlanRow[]>(`/api/plans/students?courseId=${courseId}&basePlanId=${encodeURIComponent(basePlanId)}`)
+      apiGet<StaffStudentPlanRow[]>(`/api/plans/students?courseId=${courseId}&basePlanId=${encodeURIComponent(basePlanId)}`),
+    refetchInterval: 2500
   });
+
+  const { activeInstances, inactiveInstances } = useMemo(() => {
+    const active: StaffStudentPlanRow[] = [];
+    const inactive: StaffStudentPlanRow[] = [];
+    for (const row of instances) {
+      if (row.active) {
+        active.push(row);
+      } else {
+        inactive.push(row);
+      }
+    }
+    return { activeInstances: active, inactiveInstances: inactive };
+  }, [instances]);
 
   useEffect(() => {
     if (!basePlan) {
@@ -1028,38 +1042,40 @@ export function BasePlanManagePage({
               : 'No student plans yet.'}
           </p>
         ) : (
-          <ul className="app-student-instance-list">
-            {instances.map((row) => {
-              const label = memberLabel(row.members);
-              const emails = row.members
-                .map((m) => m.user?.email?.trim() ?? '')
-                .filter((value) => value.length > 0);
-              return (
-                <li key={row.id} className="app-student-instance-row">
-                  <div className="app-student-instance-main">
-                    <Link to={coursePath(`/plans/${row.id}`)}>{label}</Link>
-                  </div>
-                  <button
-                    type="button"
-                    className="app-btn"
-                    disabled={emails.length === 0}
-                    title={
-                      emails.length > 0
-                        ? `Compare Python code against ${label}`
-                        : 'No member email available'
-                    }
-                    onClick={() => {
-                      if (emails.length > 0) {
-                        setCompareTarget({ emails, label });
-                      }
-                    }}
-                  >
-                    Check against Python
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {activeInstances.length > 0 ? (
+              <div className="app-student-instance-group">
+                <h4 className="app-student-instance-group-title">Active</h4>
+                <ul className="app-student-instance-list">
+                  {activeInstances.map((row) => (
+                    <StudentPlanInstanceRow
+                      key={row.id}
+                      row={row}
+                      coursePath={coursePath}
+                      onCompare={(emails, label) => setCompareTarget({ emails, label })}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="app-muted">No active student plans right now.</p>
+            )}
+            {inactiveInstances.length > 0 ? (
+              <div className="app-student-instance-group">
+                <h4 className="app-student-instance-group-title">Inactive</h4>
+                <ul className="app-student-instance-list">
+                  {inactiveInstances.map((row) => (
+                    <StudentPlanInstanceRow
+                      key={row.id}
+                      row={row}
+                      coursePath={coursePath}
+                      onCompare={(emails, label) => setCompareTarget({ emails, label })}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
 
@@ -1101,6 +1117,76 @@ function memberLabel(
     return names.join(', ');
   }
   return `${names.slice(0, 3).join(', ')} +${names.length - 3}`;
+}
+
+function memberDisplayName(user?: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}): string {
+  if (!user) {
+    return 'Unknown';
+  }
+  const name = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+  return name.length ? name : (user.email ?? 'Unknown');
+}
+
+function StudentPlanInstanceRow({
+  row,
+  coursePath,
+  onCompare
+}: {
+  row: StaffStudentPlanRow;
+  coursePath: (path: string) => string;
+  onCompare: (emails: string[], label: string) => void;
+}) {
+  const label = memberLabel(row.members);
+  const emails = row.members
+    .map((m) => m.user?.email?.trim() ?? '')
+    .filter((value) => value.length > 0);
+  const visibleMembers = row.members.slice(0, 3);
+  const overflow = row.members.length - visibleMembers.length;
+
+  return (
+    <li className="app-student-instance-row">
+      <div className="app-student-instance-main">
+        <Link to={coursePath(`/plans/${row.id}`)}>
+          {row.members.length === 0 ? (
+            '(no members)'
+          ) : (
+            <>
+              {visibleMembers.map((m, i) => (
+                <span key={`${row.id}-${i}`}>
+                  {i > 0 ? ', ' : ''}
+                  <span className={m.active ? 'app-member-active' : undefined}>
+                    {memberDisplayName(m.user)}
+                  </span>
+                </span>
+              ))}
+              {overflow > 0 ? ` +${overflow}` : null}
+            </>
+          )}
+        </Link>
+      </div>
+      <button
+        type="button"
+        className="app-btn"
+        disabled={emails.length === 0}
+        title={
+          emails.length > 0
+            ? `Compare Python code against ${label}`
+            : 'No member email available'
+        }
+        onClick={() => {
+          if (emails.length > 0) {
+            onCompare(emails, label);
+          }
+        }}
+      >
+        Check against Python
+      </button>
+    </li>
+  );
 }
 
 /** Local form state for PATCH merge (same fields as form inputs). */

@@ -494,12 +494,21 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
       orderBy: { updatedAt: 'desc' }
     });
     res.json(
-      plans.map((plan) => ({
-        id: plan.id,
-        title: plan.basePlan.title,
-        basePlanId: plan.basePlanId,
-        members: plan.members
-      }))
+      plans.map((plan) => {
+        const docName = studentPlanDocName(courseId, plan.id);
+        const activeUserIds = getActiveStudentUserIds(docName);
+        const activeSet = new Set(activeUserIds);
+        return {
+          id: plan.id,
+          title: plan.basePlan.title,
+          basePlanId: plan.basePlanId,
+          active: activeSet.size > 0,
+          members: plan.members.map((m) => ({
+            user: m.user,
+            active: activeSet.has(m.userId)
+          }))
+        };
+      })
     );
   } catch (error) {
     next(error);

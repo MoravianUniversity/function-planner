@@ -721,10 +721,20 @@ textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.app-student-instance-group {
+  margin-top: 0.75rem;
+}
+
+.app-student-instance-group-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .app-student-instance-list {
   list-style: none;
   padding: 0;
-  margin: 0.5rem 0 0;
+  margin: 0.35rem 0 0;
 }
 
 .app-student-instance-row {

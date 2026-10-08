@@ -26,7 +26,8 @@ import {
   startStudentPlanSchema,
   stringifyPlannerModel,
   studentPlanDocName,
-  updateBasePlanSchema
+  updateBasePlanSchema,
+  withTemplateFunctionKeys
 } from '@function-planner/shared';
 import { loadCourseContext, requireAuth, requireRole } from '../middleware/auth.js';
 import { requireCourseApiToken, requireCourseApiTokenOrStaff } from '../middleware/apiToken.js';
@@ -361,7 +362,9 @@ router.post(
 
       let nextSolutionContent: string;
       if (mode === 'reset' || !planHasSolution(plan)) {
-        nextSolutionContent = plan.content;
+        nextSolutionContent = baseModel
+          ? stringifyPlannerModel(withTemplateFunctionKeys(baseModel))
+          : plan.content;
       } else {
         const solutionModel = parsePlannerModel(plan.solutionContent);
         if (!baseModel) {

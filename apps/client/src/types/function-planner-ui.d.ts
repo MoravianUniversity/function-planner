@@ -17,7 +17,10 @@ declare module 'function-planner-ui' {
     notifyModelData(property: string): void;
     destroy(): void;
     exportModel(): object;
-    importModel(data: object): void;
+    importModel(data: object, opts?: { asTemplateSeed?: boolean }): void;
+    getTemplateFunctionKeys(): string[] | null;
+    isTemplateFunctionKey(key: string | number): boolean;
+    ensureTemplateFunctionKeys(opts?: { asTemplateSeed?: boolean }): void;
   }
 
   export interface ExtraFab {
@@ -46,6 +49,8 @@ declare module 'function-planner-ui' {
     docStyle?: string;
     canClaimFuncs?: boolean;
     adminMode?: boolean;
+    /** When false, do not freeze/persist templateFunctionKeys (base-plan admin). Default: !adminMode. */
+    freezeTemplateFunctionKeys?: boolean;
     callGraphOnly?: boolean;
     showSaveJSON?: boolean;
     showImportPython?: boolean;

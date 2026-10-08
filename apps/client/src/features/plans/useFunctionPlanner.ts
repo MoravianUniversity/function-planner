@@ -66,6 +66,11 @@ export interface UseFunctionPlannerOptions {
 export interface UseFunctionPlannerResult {
   hostRef: React.RefObject<HTMLDivElement | null>;
   status: YjsCollabStatus;
+  /**
+   * True after a live session drops or while reconnecting after a prior sync.
+   * Hosts should block editing (e.g. offline scrim) while this is set.
+   */
+  isOffline: boolean;
   errorMessage: string | null;
   setErrorMessage: (msg: string | null) => void;
   /**
@@ -172,6 +177,8 @@ export function useFunctionPlanner({
 }: UseFunctionPlannerOptions): UseFunctionPlannerResult {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<YjsCollabStatus>('idle');
+  /** Becomes true on first sync for the current provider; cleared when the provider is torn down. */
+  const [hasSyncedOnce, setHasSyncedOnce] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [memberFocusByUserId, setMemberFocusByUserId] = useState<Record<string, string | null>>({});
   const [followingUserId, setFollowingUserId] = useState<string | null>(null);
@@ -225,6 +232,7 @@ export function useFunctionPlanner({
     provider.awareness.on('change', syncFocusMap);
     syncFocusMap();
 
+    setHasSyncedOnce(false);
     setStatus('connecting');
     setErrorMessage(null);
 
@@ -309,6 +317,7 @@ export function useFunctionPlanner({
 
     const onSync = (isSynced: boolean): void => {
       if (isSynced) {
+        setHasSyncedOnce(true);
         setStatus('synced');
         handle.model.markSynced({ source: 'websocket' });
         applyAuthorsAfterSync();
@@ -322,6 +331,7 @@ export function useFunctionPlanner({
     provider.on('status', onStatus);
     provider.on('sync', onSync);
     if (provider.synced) {
+      setHasSyncedOnce(true);
       setStatus('synced');
       handle.model.markSynced({ source: 'websocket' });
       applyAuthorsAfterSync();
@@ -341,6 +351,8 @@ export function useFunctionPlanner({
       awarenessRef.current = null;
       setMemberFocusByUserId({});
       setFollowingUserId(null);
+      setHasSyncedOnce(false);
+      setStatus('idle');
       lastFollowedFocusRef.current = undefined;
       try {
         provider.awareness.setLocalState(null);
@@ -418,9 +430,13 @@ export function useFunctionPlanner({
     jumpToMember(userId);
   };
 
+  const isOffline =
+    status === 'error' || (hasSyncedOnce && (status === 'connecting' || status === 'idle'));
+
   return {
     hostRef,
     status,
+    isOffline,
     errorMessage,
     setErrorMessage,
     memberFocusByUserId,

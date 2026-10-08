@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useFunctionPlanner, type PlannerExtraFab, type UseFunctionPlannerOptions } from './useFunctionPlanner';
 import type { YjsCollabStatus } from './yjsCollabStatus';
 
@@ -153,22 +153,47 @@ export function FunctionPlannerHost({
     };
   }, [memberList, currentUserId]);
 
-  const { hostRef, status, memberFocusByUserId, jumpToMember, followingUserId, followMember } =
-    useFunctionPlanner({
-      ...plannerProps,
-      externalAuthors,
-      authorLabels,
-      localUser
-    });
+  const {
+    hostRef,
+    status,
+    isOffline,
+    memberFocusByUserId,
+    jumpToMember,
+    followingUserId,
+    followMember
+  } = useFunctionPlanner({
+    ...plannerProps,
+    externalAuthors,
+    authorLabels,
+    localUser
+  });
   const ordered = sortMembers(memberList, currentUserId);
+
+  useEffect(() => {
+    if (!isOffline) {
+      return;
+    }
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      active.blur();
+    }
+  }, [isOffline]);
 
   return (
     <div className="app-planner-immersive-root">
-      <div ref={hostRef} className="app-planner-host" />
+      <div ref={hostRef} className="app-planner-host" {...(isOffline ? { inert: true } : {})} />
 
-      {topOverlay ? <div className="app-planner-top-overlay">{topOverlay}</div> : null}
+      {topOverlay ? (
+        <div className="app-planner-top-overlay" {...(isOffline ? { inert: true } : {})}>
+          {topOverlay}
+        </div>
+      ) : null}
 
-      <div className="app-planner-bottom-bar" aria-label="Plan members">
+      <div
+        className="app-planner-bottom-bar"
+        aria-label="Plan members"
+        {...(isOffline ? { inert: true } : {})}
+      >
         <span
           className={statusDotClass(status)}
           data-tip={statusTitle(status)}
@@ -233,6 +258,32 @@ export function FunctionPlannerHost({
           })}
         </ul>
       </div>
+
+      {isOffline ? (
+        <div
+          className="app-planner-offline-scrim"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="app-planner-offline-title"
+          aria-describedby="app-planner-offline-desc"
+        >
+          <div className="app-planner-offline-card">
+            <h2 id="app-planner-offline-title">You're offline</h2>
+            <p id="app-planner-offline-desc">
+              Connection to the collaboration server was lost. Editing is paused until you reconnect.
+            </p>
+            <button
+              type="button"
+              className="app-btn app-btn-primary"
+              onClick={() => {
+                window.location.reload();
+              }}
+            >
+              Refresh to reconnect
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,10 +1,8 @@
-NAME="function-planner"
-
 # Pull and rebuild after new changes land on the default branch.
 # Run as the app user unless a command is prefixed with sudo.
 
-sudo su -l "$NAME"
-cd ~/"$NAME"
+sudo su -l "function-planner"
+cd ~/"function-planner"
 
 # Fetch latest code (including pinned submodule commits)
 git pull
@@ -29,7 +27,7 @@ npm run prisma:deploy -w apps/server
 exit
 
 # Client dist must stay readable by nginx
-sudo chown -R "$NAME":www-data /home/"$NAME"/"$NAME"/apps/client/dist
+sudo chown -R function-planner:www-data /home/function-planner/function-planner/apps/client/dist
 
 # Restart the API so it picks up the new server build
 sudo systemctl restart function-planner-api.service

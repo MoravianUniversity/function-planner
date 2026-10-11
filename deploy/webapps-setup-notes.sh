@@ -1,5 +1,3 @@
-NAME="function-planner"
-
 # sudo apt update
 # sudo apt install git curl nano nginx libnginx-mod-http-brotli-filter libnginx-mod-http-brotli-static nodejs npm postgresql postgresql-contrib certbot python3-certbot-nginx python3-certbot-dns-cloudflare
 
@@ -28,15 +26,15 @@ NAME="function-planner"
 #     \q
 
 # Create a new user and switch to that user
-sudo useradd -m "$NAME" -s /bin/bash
-sudo su -l "$NAME"
+sudo useradd -m "function-planner" -s /bin/bash
+sudo su -l "function-planner"
 
 # Add keys
 mkdir -p .ssh
 cat >.ssh/authorized_keys  # from any public key you want to allow access
 cat >.ssh/id_ed25519       # for access to github
 cat >.ssh/id_ed25519.pub   # for access to github
-chown -R "$NAME":"$NAME" .ssh
+chown -R function-planner:function-planner .ssh
 chmod 700 .ssh
 chmod 600 .ssh/authorized_keys
 chmod 600 .ssh/id_ed25519
@@ -52,9 +50,9 @@ nvm install v$NODE_VERSION
 
 # Clone the repo
 NAME="function-planner"
-REPO="git@github.com:MoravianUniversity/$NAME.git"
-git clone "$REPO" "$NAME"
-cd "$NAME"
+REPO="git@github.com:MoravianUniversity/function-planner.git"
+git clone "$REPO" function-planner
+cd function-planner
 
 # Unique install steps for this repo
 git submodule update --init --recursive
@@ -76,13 +74,13 @@ npm run build -w apps/client  # after editing the .env file, you need to rebuild
 
 # Copy the example nginx config and systemd service files and edit them to match the domain name and paths.
 exit
-sudo chown -R "$NAME":www-data /home/"$NAME"/"$NAME"/apps/client/dist
-sudo chmod a+x /home/"$NAME"
-sudo cp /home/"$NAME"/"$NAME"/deploy/nginx.conf.example /etc/nginx/conf.d/"$NAME".conf
-sudo nano /etc/nginx/conf.d/"$NAME".conf
+sudo chown -R function-planner:www-data /home/function-planner/function-planner/apps/client/dist
+sudo chmod a+x /home/function-planner
+sudo cp /home/function-planner/function-planner/deploy/nginx.conf.example /etc/nginx/conf.d/function-planner.conf
+sudo nano /etc/nginx/conf.d/function-planner.conf
 sudo nginx -s reload
 
-sudo cp /home/"$NAME"/"$NAME"/deploy/systemd/function-planner-api.service.example /etc/systemd/system/function-planner-api.service
+sudo cp /home/function-planner/function-planner/deploy/systemd/function-planner-api.service.example /etc/systemd/system/function-planner-api.service
 sudo nano /etc/systemd/system/function-planner-api.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now function-planner-api.service

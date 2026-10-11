@@ -11,6 +11,9 @@ export type { YjsCollabStatus };
 
 const EMPTY_AUTHOR_LABELS: Record<string, string> = {};
 
+/** Failed upgrades (never opened) before surfacing Offline and asking for a remint. */
+const FAILED_OPEN_THRESHOLD = 3;
+
 function yjsWebSocketBaseUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}/yjs`;
@@ -61,6 +64,11 @@ export interface UseFunctionPlannerOptions {
   enabled?: boolean;
   /** Groups of FABs stacked above theme/settings/help. */
   extraFabs?: PlannerExtraFab[][];
+  /**
+   * Called after repeated WebSocket open failures (e.g. expired ticket).
+   * Parents should invalidate the collab-ticket query so a fresh ticket is minted.
+   */
+  onConnectionFailed?: () => void;
 }
 
 export interface UseFunctionPlannerResult {
@@ -173,7 +181,8 @@ export function useFunctionPlanner({
   authorLabels = EMPTY_AUTHOR_LABELS,
   localUser = null,
   enabled = true,
-  extraFabs = []
+  extraFabs = [],
+  onConnectionFailed
 }: UseFunctionPlannerOptions): UseFunctionPlannerResult {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<YjsCollabStatus>('idle');
@@ -201,16 +210,23 @@ export function useFunctionPlanner({
   authorLabelsRef.current = authorLabels;
   const localUserRef = useRef(localUser);
   localUserRef.current = localUser;
+  const onConnectionFailedRef = useRef(onConnectionFailed);
+  onConnectionFailedRef.current = onConnectionFailed;
   const awarenessRef = useRef<AwarenessLike | null>(null);
   const handleRef = useRef<PlannerHandle | null>(null);
+  const providerRef = useRef<WebsocketProvider | null>(null);
 
-  // Remount when fab titles/icons/disabled change; onClick always read from ref.
+  // Remount when fab titles/icons change; disabled/onClick read from ref at click time.
+  // Omit `disabled` so leave-pending toggles do not tear down the Yjs room.
   const extraFabsKey = JSON.stringify(
-    extraFabs.map((group) => group.map((fab) => ({ title: fab.title, icon: fab.icon, disabled: Boolean(fab.disabled) })))
+    extraFabs.map((group) => group.map((fab) => ({ title: fab.title, icon: fab.icon })))
   );
 
+  /** Gate mount on ticket presence without remounting when the token string remints. */
+  const collabReady = Boolean(enabled && roomSegment && ticket);
+
   useEffect(() => {
-    if (!enabled || !roomSegment || !ticket) {
+    if (!collabReady || !roomSegment || !ticket) {
       return;
     }
 
@@ -223,6 +239,7 @@ export function useFunctionPlanner({
     const provider = new WebsocketProvider(yjsWebSocketBaseUrl(), roomSegment, ydoc, {
       params: { ticket }
     });
+    providerRef.current = provider;
     awarenessRef.current = provider.awareness;
     applyLocalAwarenessState(provider.awareness, localUserRef.current);
 
@@ -306,8 +323,13 @@ export function useFunctionPlanner({
     const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refreshDiagramSize) : null;
     resizeObserver?.observe(host);
 
+    let failedOpens = 0;
+    let remintRequested = false;
+
     const onStatus = (event: { status: string }): void => {
       if (event.status === 'connected') {
+        failedOpens = 0;
+        remintRequested = false;
         setStatus('connecting');
       }
       if (event.status === 'disconnected') {
@@ -328,8 +350,25 @@ export function useFunctionPlanner({
       }
     };
 
+    /**
+     * y-websocket emits connection-close before clearing wsconnected on a drop.
+     * Failed upgrades never open — no `disconnected` status — so count those here.
+     */
+    const onConnectionClose = (): void => {
+      if (provider.wsconnected) {
+        return;
+      }
+      failedOpens += 1;
+      if (failedOpens >= FAILED_OPEN_THRESHOLD && !remintRequested) {
+        remintRequested = true;
+        setStatus('error');
+        onConnectionFailedRef.current?.();
+      }
+    };
+
     provider.on('status', onStatus);
     provider.on('sync', onSync);
+    provider.on('connection-close', onConnectionClose);
     if (provider.synced) {
       setHasSyncedOnce(true);
       setStatus('synced');
@@ -346,9 +385,10 @@ export function useFunctionPlanner({
       resizeObserver?.disconnect();
       provider.off('status', onStatus);
       provider.off('sync', onSync);
-      provider.awareness.off('change', syncFocusMap);
+      provider.off('connection-close', onConnectionClose);
       handleRef.current = null;
       awarenessRef.current = null;
+      providerRef.current = null;
       setMemberFocusByUserId({});
       setFollowingUserId(null);
       setHasSyncedOnce(false);
@@ -363,7 +403,27 @@ export function useFunctionPlanner({
       provider.destroy();
       ydoc.destroy();
     };
-  }, [enabled, roomSegment, ticket, planId, readonly, adminMode, showLoadJSON, extraFabsKey]);
+    // `ticket` intentionally omitted: remints update provider.params without remounting.
+  }, [collabReady, roomSegment, planId, readonly, adminMode, showLoadJSON, extraFabsKey]);
+
+  // Apply reminted tickets to the live provider (next WS URL uses params via the url getter).
+  useEffect(() => {
+    const provider = providerRef.current;
+    if (!provider || !ticket) {
+      return;
+    }
+    if (provider.params.ticket === ticket) {
+      return;
+    }
+    provider.params.ticket = ticket;
+    if (!provider.wsconnected) {
+      setStatus((prev) => (prev === 'error' ? 'connecting' : prev));
+      // Kick a connect if nothing is in flight; otherwise the in-flight/backoff retry picks up params.
+      if (!provider.wsconnecting && provider.ws === null) {
+        provider.connect();
+      }
+    }
+  }, [ticket]);
 
   // Live-update authors when membership or display names change without remounting the Y.Doc.
   useEffect(() => {

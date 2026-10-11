@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PendingJoinRequestsResponse, PlanConfig } from '@function-planner/shared';
 import { parsePlanConfig, parsePlannerInitialModel, studentPlanRoomSegment } from '@function-planner/shared';
@@ -11,6 +11,7 @@ import { useCourseContext } from '../../context/CourseContext';
 import type { CoursesResponse } from '../../types/api';
 import { AppDialog } from '../../components/ui/AppDialog';
 import { ComparePythonDialog } from './ComparePythonDialog';
+import { collabTicketQueryOptions } from './collabTicketQuery';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
 import type { PlannerExtraFab } from './useFunctionPlanner';
 
@@ -105,9 +106,12 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         { courseId, studentPlanId: planId }
       ),
     enabled: Boolean(courseId && planId),
-    staleTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false
+    ...collabTicketQueryOptions
   });
+
+  const onConnectionFailed = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ['collab-ticket', 'student-plan', courseId, planId] });
+  }, [qc, courseId, planId]);
 
   const expectedRoom = studentPlanRoomSegment(courseId, planId);
   const roomOk = Boolean(ticketPayload && ticketPayload.roomSegment === expectedRoom);
@@ -364,6 +368,7 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         adminMode={Boolean(isInstructor && canEdit && !plan.isMember)}
         enabled={plannerEnabled}
         extraFabs={extraFabs}
+        onConnectionFailed={onConnectionFailed}
         members={plan.members}
         currentUserId={plan.currentUserId}
         topOverlay={topOverlay}

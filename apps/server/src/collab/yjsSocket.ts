@@ -5,7 +5,7 @@ import { WebSocketServer } from 'ws';
 import { parseYjsDocName } from '@function-planner/shared';
 import { verifyCollabTicket } from './ticket.js';
 import { addStudentPlanPresence, removeStudentPlanPresence } from './presence.js';
-import { installYjsPersistence } from './yjsPersistence.js';
+import { ensureYjsDocReady, installYjsPersistence } from './yjsPersistence.js';
 
 /**
  * y-websocket@1.5.4 server utils (CommonJS) — uses yjs 13 + y-protocols, matching the
@@ -62,22 +62,36 @@ export function attachYjsWebSocket(httpServer: Server): void {
     }
 
     wss.handleUpgrade(request, socket, head, (ws) => {
-      const parsed = parseYjsDocName(docName);
-      const trackPresence = parsed?.kind === 'student' && verified.kind === 'member';
-      if (trackPresence) {
-        addStudentPlanPresence(docName, verified.userId);
-      }
+      void (async () => {
+        try {
+          // Load DB state before SyncStep1 so sole-user rooms do not race bindState.
+          await ensureYjsDocReady(docName);
 
-      const clearPresence = (): void => {
-        if (trackPresence) {
-          removeStudentPlanPresence(docName, verified.userId);
+          const parsed = parseYjsDocName(docName);
+          const trackPresence = parsed?.kind === 'student' && verified.kind === 'member';
+          if (trackPresence) {
+            addStudentPlanPresence(docName, verified.userId);
+          }
+
+          const clearPresence = (): void => {
+            if (trackPresence) {
+              removeStudentPlanPresence(docName, verified.userId);
+            }
+          };
+
+          ws.on('close', clearPresence);
+          ws.on('error', clearPresence);
+
+          setupWSConnection(ws, request, { docName, gc: true });
+        } catch (err) {
+          console.error('Failed to set up Yjs websocket', docName, err);
+          try {
+            ws.close();
+          } catch {
+            // ignore
+          }
         }
-      };
-
-      ws.on('close', clearPresence);
-      ws.on('error', clearPresence);
-
-      setupWSConnection(ws, request, { docName, gc: true });
+      })();
     });
   });
 }

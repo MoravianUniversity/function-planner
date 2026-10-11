@@ -13,7 +13,8 @@ const yWebsocketUtils = require('y-websocket/bin/utils') as {
     writeState: (docName: string, doc: YjsDoc) => Promise<unknown>;
     provider: unknown;
   } | null) => void;
-  docs: Map<string, YjsDoc & { destroy: () => void; name: string }>;
+  getYDoc: (docName: string, gc?: boolean) => YjsDoc & { destroy: () => void; name: string; conns: Map<unknown, unknown> };
+  docs: Map<string, YjsDoc & { destroy: () => void; name: string; conns: Map<unknown, unknown> }>;
 };
 const Y = require('yjs') as {
   Doc: new () => YjsDoc;
@@ -32,12 +33,22 @@ type YjsDoc = {
   getMap: (name: string) => YMapLike;
   transact: (fn: () => void) => void;
   on: (event: 'update', handler: (...args: unknown[]) => void) => void;
+  destroy?: () => void;
+  conns?: Map<unknown, unknown>;
 };
 
-const { setPersistence, docs } = yWebsocketUtils;
+type ManagedDoc = YjsDoc & { destroy: () => void; name: string; conns: Map<unknown, unknown> };
+
+const { setPersistence, docs, getYDoc } = yWebsocketUtils;
 
 const DEBOUNCE_MS = 2000;
+/** Keep sole-client rooms warm so brief reconnects reuse the loaded doc. */
+const DOC_GRACE_MS = 8000;
+
 const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
+const bindPromises = new Map<string, Promise<void>>();
+/** Doc names force-dropped (e.g. plan deleted) — grace must not resurrect them. */
+const forceEvicted = new Set<string>();
 
 function plannerMapsNonEmpty(doc: YjsDoc): boolean {
   return doc.getMap('functions').size > 0 || doc.getMap('calls').size > 0;
@@ -171,6 +182,15 @@ async function persistDoc(docName: string, doc: YjsDoc): Promise<void> {
   });
 }
 
+async function flushPendingWrite(docName: string, doc: YjsDoc): Promise<void> {
+  const pending = pendingWrites.get(docName);
+  if (pending) {
+    clearTimeout(pending);
+    pendingWrites.delete(docName);
+  }
+  await persistDoc(docName, doc);
+}
+
 function schedulePersist(docName: string, doc: YjsDoc): void {
   const existing = pendingWrites.get(docName);
   if (existing) {
@@ -185,35 +205,106 @@ function schedulePersist(docName: string, doc: YjsDoc): void {
   pendingWrites.set(docName, timer);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Ensure the in-memory doc exists and DB state has been applied before the
+ * y-websocket sync handshake (SyncStep1) runs.
+ */
+export async function ensureYjsDocReady(docName: string, gc = true): Promise<void> {
+  forceEvicted.delete(docName);
+  getYDoc(docName, gc);
+  const bind = bindPromises.get(docName);
+  if (bind) {
+    await bind;
+  }
+}
+
 export function installYjsPersistence(): void {
   setPersistence({
     provider: null,
     bindState: (docName, doc) => {
-      void loadAndBind(docName, doc).catch((err) => {
-        console.error('Failed to bind Yjs state', docName, err);
-      });
+      forceEvicted.delete(docName);
+      const bind = loadAndBind(docName, doc)
+        .catch((err) => {
+          console.error('Failed to bind Yjs state', docName, err);
+        })
+        .finally(() => {
+          // Keep resolved promise so late ensureYjsDocReady awaiters finish immediately.
+        });
+      bindPromises.set(docName, bind);
       doc.on('update', () => {
         schedulePersist(docName, doc);
       });
     },
+    /**
+     * y-websocket calls this when the last connection closes, then:
+     *   writeState(...).then(() => doc.destroy())
+     *   docs.delete(docName)  // already ran synchronously before we finish
+     *
+     * Re-insert the doc for a grace window so sole-user reconnects reuse it,
+     * and swallow destroy when someone reconnected during grace.
+     */
     writeState: async (docName, doc) => {
-      const pending = pendingWrites.get(docName);
-      if (pending) {
-        clearTimeout(pending);
-        pendingWrites.delete(docName);
+      const managed = doc as ManagedDoc;
+      const swallowNextDestroy = (): void => {
+        // closeConn always does writeState(...).then(() => doc.destroy()).
+        const realDestroy = managed.destroy.bind(managed);
+        managed.destroy = () => {
+          managed.destroy = realDestroy;
+        };
+      };
+
+      try {
+        await flushPendingWrite(docName, managed);
+      } catch (err) {
+        console.error('Failed to persist Yjs doc', docName, err);
       }
-      await persistDoc(docName, doc);
+
+      if (forceEvicted.has(docName)) {
+        docs.delete(docName);
+        bindPromises.delete(docName);
+        swallowNextDestroy();
+        return;
+      }
+
+      // Undo closeConn's immediate docs.delete so reconnects hit the warm doc.
+      docs.set(docName, managed);
+
+      await sleep(DOC_GRACE_MS);
+
+      if (forceEvicted.has(docName)) {
+        docs.delete(docName);
+        bindPromises.delete(docName);
+        swallowNextDestroy();
+        return;
+      }
+
+      if (managed.conns.size > 0) {
+        swallowNextDestroy();
+        return;
+      }
+
+      docs.delete(docName);
+      bindPromises.delete(docName);
+      // Real destroy runs from closeConn's .then.
     }
   });
 }
 
 /** Drop an in-memory Yjs doc after the student plan is deleted. */
 export function evictYjsDoc(docName: string): void {
+  forceEvicted.add(docName);
   const pending = pendingWrites.get(docName);
   if (pending) {
     clearTimeout(pending);
     pendingWrites.delete(docName);
   }
+  bindPromises.delete(docName);
   const doc = docs.get(docName);
   if (doc) {
     doc.destroy();

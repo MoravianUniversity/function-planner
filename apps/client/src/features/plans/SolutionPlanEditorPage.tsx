@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   parsePlanConfig,
@@ -13,6 +13,7 @@ import { apiGet, apiSend } from '../../api/client';
 import { useCourseContext } from '../../context/CourseContext';
 import type { BasePlanDetail, CoursesResponse } from '../../types/api';
 import { AppDialog } from '../../components/ui/AppDialog';
+import { collabTicketQueryOptions } from './collabTicketQuery';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
 import type { PlannerExtraFab } from './useFunctionPlanner';
 
@@ -125,9 +126,12 @@ export function SolutionPlanEditorPage({ courseId }: { courseId: string }) {
         { courseId, basePlanId }
       ),
     enabled: Boolean(courseId && basePlanId && readyForCollab),
-    staleTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false
+    ...collabTicketQueryOptions
   });
+
+  const onConnectionFailed = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ['collab-ticket', 'solution-plan', courseId, basePlanId] });
+  }, [qc, courseId, basePlanId]);
 
   const expectedRoom = courseId && basePlanId ? solutionPlanRoomSegment(courseId, basePlanId) : undefined;
   const roomOk = Boolean(ticketPayload && expectedRoom && ticketPayload.roomSegment === expectedRoom);
@@ -273,6 +277,7 @@ export function SolutionPlanEditorPage({ courseId }: { courseId: string }) {
           showLoadJSON={canEdit}
           enabled={Boolean(basePlan && roomOk)}
           extraFabs={extraFabs}
+          onConnectionFailed={onConnectionFailed}
           viewModeBadge={viewModeBadge}
         />
       ) : (

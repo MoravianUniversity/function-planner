@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import { useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { basePlanRoomSegment, parsePlanConfig, parsePlannerInitialModel } from '@function-planner/shared';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChalkboardUser, faPenToSquare } from '@fortawesome/free-solid-svg-icons';
@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { apiGet, apiSend } from '../../api/client';
 import { useCourseContext } from '../../context/CourseContext';
 import type { BasePlanDetail, CoursesResponse } from '../../types/api';
+import { collabTicketQueryOptions } from './collabTicketQuery';
 import { FunctionPlannerHost } from './FunctionPlannerHost';
 import type { PlannerExtraFab } from './useFunctionPlanner';
 
@@ -29,6 +30,7 @@ interface CollabTicketResponse {
 export function BasePlanEditorPage({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
   const { coursePath } = useCourseContext();
+  const qc = useQueryClient();
   const { planId: basePlanId } = useParams<{ planId: string }>();
 
   useEffect(() => {
@@ -68,9 +70,12 @@ export function BasePlanEditorPage({ courseId }: { courseId: string }) {
         { courseId, basePlanId }
       ),
     enabled: Boolean(courseId && basePlanId && isStaff),
-    staleTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false
+    ...collabTicketQueryOptions
   });
+
+  const onConnectionFailed = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ['collab-ticket', 'base-plan', courseId, basePlanId] });
+  }, [qc, courseId, basePlanId]);
 
   const expectedRoom = courseId && basePlanId ? basePlanRoomSegment(courseId, basePlanId) : undefined;
   const roomOk = Boolean(ticketPayload && expectedRoom && ticketPayload.roomSegment === expectedRoom);
@@ -156,6 +161,7 @@ export function BasePlanEditorPage({ courseId }: { courseId: string }) {
       showLoadJSON={canEdit}
       enabled={Boolean(basePlan && roomOk)}
       extraFabs={extraFabs}
+      onConnectionFailed={onConnectionFailed}
       viewModeBadge={viewModeBadge}
     />
   );

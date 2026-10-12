@@ -73,8 +73,9 @@ export function CreatePlanDialog({ courseId, open, onOpenChange }: Props) {
             value={planId}
             onChange={(e) => {
               setPlanIdTouched(true);
-              setPlanId(slugifyPlanId(e.target.value));
+              setPlanId(sanitizePlanIdInput(e.target.value));
             }}
+            onBlur={(e) => setPlanId(slugifyPlanId(e.target.value))}
             required
             placeholder="plan-id"
           />
@@ -90,6 +91,14 @@ export function CreatePlanDialog({ courseId, open, onOpenChange }: Props) {
       </form>
     </AppDialog>
   );
+}
+
+// Lenient: keeps trailing hyphens so users can type "a-b" character by character.
+function sanitizePlanIdInput(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '');
 }
 
 function slugifyPlanId(value: string): string {

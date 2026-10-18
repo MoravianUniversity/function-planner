@@ -6,6 +6,8 @@ import { parseYjsDocName } from '@function-planner/shared';
 import { verifyCollabTicket } from './ticket.js';
 import { addStudentPlanPresence, removeStudentPlanPresence } from './presence.js';
 import { installYjsPersistence } from './yjsPersistence.js';
+import { prisma } from '../lib/prisma.js';
+import { isDocChangingMessage, isDocLocked, setDocLocked } from './locks.js';
 
 /**
  * y-websocket@1.5.4 server utils (CommonJS) — uses yjs 13 + y-protocols, matching the
@@ -61,8 +63,25 @@ export function attachYjsWebSocket(httpServer: Server): void {
       return;
     }
 
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      const parsed = parseYjsDocName(docName);
+    const parsed = parseYjsDocName(docName);
+    const isStudentMember = parsed?.kind === 'student' && verified.kind === 'member';
+
+    void (async () => {
+      if (parsed?.kind === 'student') {
+        try {
+          const row = await prisma.studentPlan.findUnique({
+            where: { id: parsed.studentPlanId },
+            select: { locked: true }
+          });
+          setDocLocked(docName, Boolean(row?.locked));
+        } catch {
+          socket.write('HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+      }
+
+      wss.handleUpgrade(request, socket, head, (ws) => {
       const trackPresence = parsed?.kind === 'student' && verified.kind === 'member';
       if (trackPresence) {
         addStudentPlanPresence(docName, verified.userId);
@@ -77,7 +96,25 @@ export function attachYjsWebSocket(httpServer: Server): void {
       ws.on('close', clearPresence);
       ws.on('error', clearPresence);
 
+      if (isStudentMember) {
+        // Members of a locked plan may still sync/observe but their document changes are dropped.
+        // Checked per message so locking applies to already-open connections.
+        const originalOn = ws.on.bind(ws) as (event: string, listener: (...args: any[]) => void) => WebSocket;
+        (ws as unknown as { on: typeof originalOn }).on = (event, listener) => {
+          if (event !== 'message') {
+            return originalOn(event, listener);
+          }
+          return originalOn(event, (data: ArrayBuffer, ...rest: unknown[]) => {
+            if (isDocLocked(docName) && isDocChangingMessage(new Uint8Array(data))) {
+              return;
+            }
+            listener(data, ...rest);
+          });
+        };
+      }
+
       setupWSConnection(ws, request, { docName, gc: true });
-    });
+      });
+    })();
   });
 }

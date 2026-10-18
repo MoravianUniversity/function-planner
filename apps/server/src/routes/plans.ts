@@ -29,11 +29,13 @@ import {
   updateBasePlanSchema,
   withTemplateFunctionKeys
 } from '@function-planner/shared';
+import { z } from 'zod';
 import { loadCourseContext, requireAuth, requireRole } from '../middleware/auth.js';
 import { requireCourseApiToken, requireCourseApiTokenOrStaff } from '../middleware/apiToken.js';
 import { rejectReadonlyCourseWrites } from '../middleware/readonly.js';
 import { prisma } from '../lib/prisma.js';
 import { getActiveStudentUserIds, hasActiveStudentMember } from '../collab/presence.js';
+import { setDocLocked } from '../collab/locks.js';
 import {
   evictYjsDoc,
   exportPlannerContentFromYjsState,
@@ -41,6 +43,8 @@ import {
 } from '../collab/yjsPersistence.js';
 
 const router = Router();
+
+const setStudentPlanLockSchema = z.object({ locked: z.boolean() });
 
 function hashBaseContent(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
@@ -503,6 +507,7 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
           title: plan.basePlan.title,
           basePlanId: plan.basePlanId,
           active: activeSet.size > 0,
+          locked: plan.locked,
           members: plan.members.map((m) => ({
             user: m.user,
             active: activeSet.has(m.userId)
@@ -896,6 +901,37 @@ router.post('/students/:studentPlanId/leave', requireAuth, loadCourseContext, re
   }
 });
 
+router.patch(
+  '/students/:studentPlanId/lock',
+  requireAuth,
+  loadCourseContext,
+  requireRole('INSTRUCTOR'),
+  rejectReadonlyCourseWrites,
+  async (req, res, next) => {
+    try {
+      const { courseId } = res.locals.auth as { courseId: string };
+      const studentPlanId = String(req.params.studentPlanId);
+      const { locked } = setStudentPlanLockSchema.parse(req.body);
+
+      const plan = await prisma.studentPlan.findFirst({ where: { id: studentPlanId, courseId } });
+      if (!plan) {
+        return res.status(404).json({ message: 'Student plan not found.' });
+      }
+
+      // Update the live socket state first so open connections are affected immediately.
+      setDocLocked(studentPlanDocName(courseId, studentPlanId), locked);
+      await prisma.studentPlan.update({
+        where: { id: studentPlanId },
+        data: { locked },
+        select: { id: true }
+      });
+      return res.json({ id: studentPlanId, locked });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRole('STUDENT', 'TA', 'INSTRUCTOR'), async (req, res, next) => {
   try {
     const { courseId, user, roles } = res.locals.auth as { courseId: string; user: { id: string }; roles: Role[] };
@@ -920,8 +956,8 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
     const docName = studentPlanDocName(courseId, plan.id);
     const activeUserIds = getActiveStudentUserIds(docName);
     const activeSet = new Set(activeUserIds);
-    // Members and instructors can edit; TAs supervising without membership are read-only.
-    const canEdit = isMember || roles.includes('INSTRUCTOR');
+    // Members edit unless the plan is locked; instructors can always edit. TAs supervising without membership are read-only.
+    const canEdit = roles.includes('INSTRUCTOR') || (isMember && !plan.locked);
 
     return res.json({
       id: plan.id,
@@ -932,6 +968,7 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
       updatedAt: plan.updatedAt,
       currentUserId: user.id,
       isMember,
+      locked: plan.locked,
       canEdit,
       readonly: !canEdit,
       settings: plan.basePlan.settings ?? null,

@@ -89,6 +89,7 @@ model StudentPlan {
   basePlanId  String
   content     String           @default("")
   yjsState    Bytes?
+  locked      Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   course      Course           @relation(fields: [courseId], references: [id])

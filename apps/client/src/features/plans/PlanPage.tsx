@@ -49,6 +49,7 @@ interface StudentPlanDetails {
   content: string;
   currentUserId: string;
   isMember: boolean;
+  locked: boolean;
   canEdit: boolean;
   readonly: boolean;
   activeUserIds: string[];
@@ -205,7 +206,25 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
     }
   });
 
+  const lockMutation = useMutation({
+    mutationFn: (locked: boolean) =>
+      apiSend<{ id: string; locked: boolean }>(
+        `/api/plans/students/${planId}/lock?courseId=${encodeURIComponent(courseId)}`,
+        'PATCH',
+        { locked }
+      ),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['student-plan', courseId, planId] });
+      void qc.invalidateQueries({ queryKey: ['student-plans', courseId] });
+      toast.success(result.locked ? 'Plan locked for students.' : 'Plan unlocked.');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Could not change plan lock.');
+    }
+  });
+
   const isMember = Boolean(plan?.isMember);
+  const isLocked = Boolean(plan?.locked);
   const basePlanId = plan?.basePlanId;
   const compareEmails =
     plan?.members.map((m) => m.email?.trim() ?? '').filter((value) => value.length > 0) ?? [];
@@ -248,8 +267,18 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         });
       }
     }
+    if (isInstructor) {
+      group.push({
+        title: isLocked ? 'Unlock plan (allow students to edit)' : 'Lock plan (prevent students from editing)',
+        icon: isLocked ? '🔓' : '🔒',
+        disabled: courseReadonly || lockMutation.isPending,
+        onClick: () => {
+          lockMutation.mutate(!isLocked);
+        }
+      });
+    }
     return [group];
-  }, [isMember, basePlanId, compareEmails.length, courseReadonly, coursePath, leaveMutation.isPending, navigate]);
+  }, [isMember, isInstructor, isLocked, basePlanId, compareEmails.length, courseReadonly, coursePath, leaveMutation.isPending, lockMutation.isPending, navigate]);
 
   const isLastMember = (plan?.members.length ?? 0) <= 1;
   const pendingRequest = joinRequests?.requests[0];
@@ -291,8 +320,12 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
         <FontAwesomeIcon icon={faChalkboardUser} />
       </span>
     ) : !canEdit ? (
-      <span className="app-planner-view-mode" data-tip="Read-only" aria-label="Read-only">
-        RO
+      <span
+        className="app-planner-view-mode"
+        data-tip={isLocked ? 'Locked by instructor' : 'Read-only'}
+        aria-label={isLocked ? 'Locked by instructor' : 'Read-only'}
+      >
+        {isLocked ? '🔒' : 'RO'}
       </span>
     ) : null;
 
@@ -343,9 +376,17 @@ export function PlanPage({ courseId, planId }: { courseId: string; planId: strin
     </div>
   ) : null;
 
+  const lockedOverlay =
+    isLocked && !canEdit && plan.isMember ? (
+      <div className="app-planner-join-banner" role="status">
+        <p>This plan is locked by your instructor. You can view it but not edit it.</p>
+      </div>
+    ) : null;
+
   const topOverlay =
-    configRefreshOverlay || joinOverlay ? (
+    configRefreshOverlay || joinOverlay || lockedOverlay ? (
       <>
+        {lockedOverlay}
         {configRefreshOverlay}
         {joinOverlay}
       </>

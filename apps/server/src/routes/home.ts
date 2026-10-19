@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Role } from '@function-planner/shared';
 import { loadCourseContext, requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
-import { isCourseReadonly } from '@function-planner/shared';
+import { isCourseReadonly, redactPasscodeFromSettings } from '@function-planner/shared';
 
 const router = Router();
 
@@ -11,7 +11,9 @@ router.get('/', requireAuth, loadCourseContext, async (_req, res, next) => {
     const { courseId, roles, user } = res.locals.auth as { courseId: string; roles: Role[]; user: { id: string } };
 
     const [basePlans, myStudentPlans, allStudentPlans, course] = await Promise.all([
-      prisma.basePlan.findMany({ where: { courseId }, orderBy: { updatedAt: 'desc' } }),
+      prisma.basePlan.findMany({ where: { courseId }, orderBy: { updatedAt: 'desc' } }).then((plans) =>
+        plans.map((plan) => ({ ...plan, settings: redactPasscodeFromSettings(plan.settings) }))
+      ),
       prisma.studentPlan.findMany({
         where: { courseId, members: { some: { userId: user.id } } },
         include: {

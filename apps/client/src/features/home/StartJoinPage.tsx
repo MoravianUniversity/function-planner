@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { JoinableStudentPlansResponse, MyJoinRequestStatus } from '@function-planner/shared';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -11,17 +11,20 @@ import type { HomeResponse } from '../../types/api';
 export function StartJoinPage({
   courseId,
   basePlanId,
-  initialTitle
+  initialTitle,
+  passcodeRequired
 }: {
   courseId: string;
   basePlanId: string;
   initialTitle?: string;
+  passcodeRequired: boolean;
 }) {
   const navigate = useNavigate();
   const { coursePath } = useCourseContext();
   const qc = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [waitingPlanId, setWaitingPlanId] = useState<string | null>(null);
+  const [passcodeInput, setPasscodeInput] = useState('');
 
   const { data: home, isLoading } = useQuery({
     queryKey: ['home', courseId],
@@ -38,7 +41,7 @@ export function StartJoinPage({
       apiGet<JoinableStudentPlansResponse>(
         `/api/plans/students/joinable?courseId=${encodeURIComponent(courseId)}&basePlanId=${encodeURIComponent(basePlanId)}`
       ),
-    enabled: Boolean(home && !existing),
+    enabled: Boolean(home && !existing && !passcodeRequired),
     refetchInterval: 2500
   });
 
@@ -48,12 +51,12 @@ export function StartJoinPage({
       apiGet<MyJoinRequestStatus>(
         `/api/plans/students/my-join-request?courseId=${encodeURIComponent(courseId)}&basePlanId=${encodeURIComponent(basePlanId)}`
       ),
-    enabled: Boolean(home && !existing),
+    enabled: Boolean(home && !existing && !passcodeRequired),
     refetchInterval: waitingPlanId ? 1500 : 4000
   });
 
   useEffect(() => {
-    if (!myRequest) {
+    if (passcodeRequired || !myRequest) {
       return;
     }
     if (myRequest.status === 'accepted') {
@@ -71,7 +74,7 @@ export function StartJoinPage({
     if (myRequest.status === 'pending') {
       setWaitingPlanId(myRequest.studentPlanId);
     }
-  }, [myRequest, navigate, qc, courseId, basePlanId, coursePath]);
+  }, [myRequest, navigate, qc, courseId, basePlanId, coursePath, passcodeRequired]);
 
   const startMutation = useMutation({
     mutationFn: () =>
@@ -97,6 +100,64 @@ export function StartJoinPage({
     },
     onError: (err: Error) => setMessage(err.message)
   });
+
+  const passcodeMutation = useMutation({
+    mutationFn: (passcode: string) =>
+      apiSend(
+        `/api/plans/base/${encodeURIComponent(basePlanId)}/passcode?courseId=${encodeURIComponent(courseId)}`,
+        'POST',
+        { passcode }
+      ),
+    onSuccess: () => {
+      setMessage(null);
+      void qc.invalidateQueries({ queryKey: ['plan-entry', courseId, basePlanId] });
+    },
+    onError: (err: Error) => setMessage(err.message)
+  });
+
+  function submitPasscode(event: FormEvent) {
+    event.preventDefault();
+    const next = passcodeInput.trim();
+    if (!next) {
+      setMessage('Enter the passcode.');
+      return;
+    }
+    setMessage(null);
+    passcodeMutation.mutate(next);
+  }
+
+  if (passcodeRequired) {
+    return (
+      <div>
+        <p>
+          <Link className="app-link-back" to={coursePath('/')}>
+            <FontAwesomeIcon icon={faArrowLeft} /> Back to home
+          </Link>
+        </p>
+        <h2>{title}</h2>
+        <p className="app-muted">Enter the passcode to start or join a plan.</p>
+        {message ? <p className="app-error">{message}</p> : null}
+        <form className="app-dialog-form" onSubmit={submitPasscode}>
+          <label>
+            Passcode
+            <input
+              type="text"
+              value={passcodeInput}
+              onChange={(e) => setPasscodeInput(e.target.value)}
+              autoComplete="off"
+              autoFocus
+              style={{ width: 'min(20rem, 100%)' }}
+            />
+          </label>
+          <div>
+            <button type="submit" className="app-btn app-btn-primary" disabled={passcodeMutation.isPending}>
+              {passcodeMutation.isPending ? 'Checking…' : 'Continue'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   if (isLoading || !home) {
     return <p>Loading...</p>;

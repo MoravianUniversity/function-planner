@@ -19,11 +19,15 @@ import {
   checkPlan,
   parsePlanConfig,
   parsePlannerModel,
+  passcodeFromSettings,
+  passcodeWasAdded,
   planCheckOptionsFromConfig,
+  redactPasscodeFromSettings,
   pythonCodeToModel,
   solutionMergeSchema,
   solutionPlanDocName,
   startStudentPlanSchema,
+  submitBasePlanPasscodeSchema,
   stringifyPlannerModel,
   studentPlanDocName,
   updateBasePlanSchema,
@@ -100,9 +104,10 @@ function toStaffBasePlanDetail(plan: {
 
 router.get('/base', requireAuth, loadCourseContext, requireRole('TA', 'INSTRUCTOR', 'STUDENT'), async (_req, res, next) => {
   try {
-    const { courseId } = res.locals.auth;
+    const { courseId, roles } = res.locals.auth as { courseId: string; roles: Role[] };
     const plans = await prisma.basePlan.findMany({ where: { courseId }, orderBy: { updatedAt: 'desc' } });
-    res.json(plans);
+    const isStaff = roles.includes('TA') || roles.includes('INSTRUCTOR');
+    res.json(isStaff ? plans : plans.map((plan) => ({ ...plan, settings: redactPasscodeFromSettings(plan.settings) })));
   } catch (error) {
     next(error);
   }
@@ -318,12 +323,54 @@ router.patch('/base/:planId', requireAuth, loadCourseContext, requireRole('INSTR
     }
 
     await prisma.basePlan.updateMany({ where: { courseId, id: planId }, data: updateData });
+    if (payload.settings !== undefined && passcodeWasAdded(existing.settings, payload.settings)) {
+      await grantPasscodeToCurrentMembers(courseId, planId);
+    }
     const updated = await prisma.basePlan.findFirstOrThrow({ where: { courseId, id: planId } });
     res.json(toStaffBasePlanDetail(updated));
   } catch (error) {
     next(error);
   }
 });
+
+router.post(
+  '/base/:planId/passcode',
+  requireAuth,
+  loadCourseContext,
+  requireRole('STUDENT'),
+  rejectReadonlyCourseWrites,
+  async (req, res, next) => {
+    try {
+      const { courseId, user } = res.locals.auth as { courseId: string; user: { id: string } };
+      const planId = String(req.params.planId);
+      const { passcode } = submitBasePlanPasscodeSchema.parse(req.body);
+      const basePlan = await prisma.basePlan.findFirst({ where: { courseId, id: planId } });
+      if (!basePlan) {
+        return res.status(404).json({ message: 'Plan not found.' });
+      }
+      if (!basePlan.published) {
+        return res.status(403).json({ message: 'This plan is not published.' });
+      }
+      const expected = passcodeFromSettings(basePlan.settings);
+      if (!expected) {
+        return res.status(400).json({ message: 'This plan does not require a passcode.' });
+      }
+      if (passcode.trim() !== expected) {
+        return res.status(403).json({ message: 'Incorrect passcode.' });
+      }
+      await prisma.basePlanPasscodeGrant.upsert({
+        where: {
+          courseId_basePlanId_userId: { courseId, basePlanId: planId, userId: user.id }
+        },
+        create: { courseId, basePlanId: planId, userId: user.id },
+        update: {}
+      });
+      return res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 router.get('/base/:planId', requireAuth, loadCourseContext, requireRole('TA', 'INSTRUCTOR'), async (req, res, next) => {
   try {
@@ -474,7 +521,8 @@ router.get('/entry/:identifier', requireAuth, loadCourseContext, async (req, res
     const body: PlanEntryResponse = {
       kind: 'start-published',
       basePlanId: basePlan.id,
-      title: basePlan.title
+      title: basePlan.title,
+      passcodeRequired: await studentNeedsPasscode(user.id, courseId, basePlan.id, basePlan.settings)
     };
     return res.json(body);
   } catch (error) {
@@ -522,10 +570,15 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
 
 router.get('/students/joinable', requireAuth, loadCourseContext, requireRole('STUDENT'), async (req, res, next) => {
   try {
-    const { courseId } = res.locals.auth as { courseId: string };
+    const { courseId, user } = res.locals.auth as { courseId: string; user: { id: string } };
     const basePlanId = typeof req.query.basePlanId === 'string' ? req.query.basePlanId.trim() : '';
     if (!basePlanId) {
       return res.status(400).json({ message: 'basePlanId is required.' });
+    }
+
+    const passcodeBlock = await passcodeBlockResponse(user.id, courseId, basePlanId);
+    if (passcodeBlock) {
+      return res.status(passcodeBlock.status).json(passcodeBlock.body);
     }
 
     const plans = await prisma.studentPlan.findMany({
@@ -654,6 +707,13 @@ router.post('/students/start', requireAuth, loadCourseContext, requireRole('STUD
       return res.status(400).json({ message: 'Cannot start an unpublished plan.' });
     }
 
+    if (
+      !roles.includes('INSTRUCTOR') &&
+      (await studentNeedsPasscode(user.id, courseId, basePlan.id, basePlan.settings))
+    ) {
+      return res.status(403).json({ message: 'Enter the plan passcode before continuing.' });
+    }
+
     const studentPlan = await prisma.studentPlan.create({
       data: {
         basePlanId: payload.basePlanId,
@@ -732,6 +792,11 @@ router.post('/students/:studentPlanId/join-requests', requireAuth, loadCourseCon
 
     if (plan.members.some((m) => m.userId === user.id)) {
       return res.status(409).json({ message: 'You are already a member of this plan.' });
+    }
+
+    const passcodeBlock = await passcodeBlockResponse(user.id, courseId, plan.basePlanId);
+    if (passcodeBlock) {
+      return res.status(passcodeBlock.status).json(passcodeBlock.body);
     }
 
     const existingMembership = await findMembershipForBasePlan(user.id, courseId, plan.basePlanId);
@@ -971,7 +1036,7 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
       locked: plan.locked,
       canEdit,
       readonly: !canEdit,
-      settings: plan.basePlan.settings ?? null,
+      settings: redactPasscodeFromSettings(plan.basePlan.settings) ?? null,
       basePlanContent: plan.basePlan.content ?? '',
       activeUserIds,
       members: plan.members.map((m) => ({
@@ -1189,6 +1254,57 @@ router.post(
 );
 
 export default router;
+
+async function studentNeedsPasscode(
+  userId: string,
+  courseId: string,
+  basePlanId: string,
+  settings: unknown
+): Promise<boolean> {
+  if (!passcodeFromSettings(settings)) {
+    return false;
+  }
+  const grant = await prisma.basePlanPasscodeGrant.findUnique({
+    where: {
+      courseId_basePlanId_userId: { courseId, basePlanId, userId }
+    },
+    select: { userId: true }
+  });
+  return grant == null;
+}
+
+async function passcodeBlockResponse(
+  userId: string,
+  courseId: string,
+  basePlanId: string
+): Promise<{ status: number; body: { message: string } } | null> {
+  const basePlan = await prisma.basePlan.findFirst({
+    where: { courseId, id: basePlanId },
+    select: { settings: true }
+  });
+  if (!basePlan) {
+    return { status: 404, body: { message: 'Plan not found.' } };
+  }
+  if (await studentNeedsPasscode(userId, courseId, basePlanId, basePlan.settings)) {
+    return { status: 403, body: { message: 'Enter the plan passcode before continuing.' } };
+  }
+  return null;
+}
+
+async function grantPasscodeToCurrentMembers(courseId: string, basePlanId: string) {
+  const members = await prisma.studentPlanMember.findMany({
+    where: { studentPlan: { courseId, basePlanId } },
+    select: { userId: true }
+  });
+  const userIds = [...new Set(members.map((member) => member.userId))];
+  if (userIds.length === 0) {
+    return;
+  }
+  await prisma.basePlanPasscodeGrant.createMany({
+    data: userIds.map((userId) => ({ courseId, basePlanId, userId })),
+    skipDuplicates: true
+  });
+}
 
 async function findMembershipForBasePlan(userId: string, courseId: string, basePlanId: string) {
   return prisma.studentPlanMember.findFirst({

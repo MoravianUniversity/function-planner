@@ -29,6 +29,7 @@ model User {
   enrollments Enrollment[]
   memberships StudentPlanMember[]
   joinRequests JoinRequest[]
+  passcodeGrants BasePlanPasscodeGrant[]
 }
 
 model Course {
@@ -78,9 +79,22 @@ model BasePlan {
   updatedAt               DateTime @updatedAt
   course                  Course   @relation(fields: [courseId], references: [id])
   studentPlans            StudentPlan[]
+  passcodeGrants          BasePlanPasscodeGrant[]
 
   @@id([courseId, id])
   @@index([courseId, published])
+}
+
+model BasePlanPasscodeGrant {
+  courseId   String
+  basePlanId String
+  userId     String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  basePlan   BasePlan @relation(fields: [courseId, basePlanId], references: [courseId, id], onDelete: Cascade)
+
+  @@id([courseId, basePlanId, userId])
+  @@index([userId])
 }
 
 model StudentPlan {

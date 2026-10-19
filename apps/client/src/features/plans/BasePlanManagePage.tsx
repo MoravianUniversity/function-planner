@@ -149,6 +149,7 @@ export function BasePlanManagePage({
   const [showTestGlobalCode, setShowTestGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showTestGlobalCode);
   const [showCodeFor, setShowCodeFor] = useState(DEFAULT_PLAN_CONFIG.showCodeFor);
   const [showTestCodeFor, setShowTestCodeFor] = useState(DEFAULT_PLAN_CONFIG.showTestCodeFor);
+  const [passcode, setPasscode] = useState(DEFAULT_PLAN_CONFIG.passcode);
   const [moduleReadOnlyMode, setModuleReadOnlyMode] = useState<ModuleReadOnlyMode>('none');
   const [moduleReadOnlyFields, setModuleReadOnlyFields] = useState<ModuleReadOnlyField[]>([]);
   const [functionReadOnly, setFunctionReadOnly] = useState<FunctionReadOnlyRule[]>([]);
@@ -224,6 +225,7 @@ export function BasePlanManagePage({
     setShowTestGlobalCode(config.showTestGlobalCode);
     setShowCodeFor(config.showCodeFor);
     setShowTestCodeFor(config.showTestCodeFor);
+    setPasscode(config.passcode);
     const split = splitModuleReadOnly(config.moduleReadOnly);
     setModuleReadOnlyMode(split.mode);
     setModuleReadOnlyFields(split.fields);
@@ -272,6 +274,7 @@ export function BasePlanManagePage({
         showTestGlobalCode,
         showCodeFor,
         showTestCodeFor,
+        passcode,
         moduleReadOnlyMode,
         moduleReadOnlyFields,
         functionReadOnly,
@@ -308,6 +311,7 @@ export function BasePlanManagePage({
         showTestGlobalCode: s.showTestGlobalCode,
         showCodeFor: s.showCodeFor,
         showTestCodeFor: s.showTestCodeFor,
+        passcode: s.passcode.trim(),
         moduleReadOnly: storedModuleReadOnly(s.moduleReadOnlyMode, s.moduleReadOnlyFields),
         functionReadOnly: sanitizeFunctionReadOnly(s.functionReadOnly)
       };
@@ -453,6 +457,7 @@ export function BasePlanManagePage({
         {!canConfigure ? (
           <div className="app-plan-readonly">
             <p><strong>Title:</strong> {basePlan.title}</p>
+            <p><strong>Passcode:</strong> {passcode || '(none)'}</p>
             <p><strong>Allowed types:</strong> {allowedTypesText}</p>
             <p><strong>Min functions:</strong> {minFunctions}</p>
             <p><strong>Min testable:</strong> {minTestable}</p>
@@ -494,6 +499,25 @@ export function BasePlanManagePage({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={() => persistConfig()}
+                />
+              </div>
+              <div className="app-config-form-full">
+                <label htmlFor="plan-config-passcode">
+                  <ConfigFieldTitle fieldKey="passcode" />
+                </label>
+                <input
+                  id="plan-config-passcode"
+                  type="text"
+                  className="app-config-regex"
+                  value={passcode}
+                  autoComplete="off"
+                  placeholder="(none)"
+                  onChange={(e) => setPasscode(e.target.value)}
+                  onBlur={(e) => {
+                    const next = e.target.value.trim();
+                    setPasscode(next);
+                    persistConfig({ passcode: next });
+                  }}
                 />
               </div>
               <div className="app-config-form-full">
@@ -1210,6 +1234,7 @@ interface ConfigFormState {
   showTestGlobalCode: boolean;
   showCodeFor: string;
   showTestCodeFor: string;
+  passcode: string;
   moduleReadOnlyMode: ModuleReadOnlyMode;
   moduleReadOnlyFields: ModuleReadOnlyField[];
   functionReadOnly: FunctionReadOnlyRule[];
@@ -1219,6 +1244,7 @@ type ConfigFieldKey = keyof PlanConfig;
 
 const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
   title: 'Title',
+  passcode: 'Passcode',
   allowedTypes: 'Allowed types',
   minFunctions: 'Min functions',
   minTestable: 'Min testable',
@@ -1243,6 +1269,8 @@ const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
 
 const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   title: 'The title of the plan.',
+  passcode:
+    'Optional passcode students must enter once before they can start or join this plan. Leave blank for no passcode. Matching is exact, including case, after trimming spaces. Students who already entered a code are not asked again if you change it. Students already on a plan when you first set a passcode are let through without entering it.',
   allowedTypes: `Allowed parameter and return types, comma-separated. Default: ${DEFAULT_PLAN_CONFIG.allowedTypes.join(', ')}. Collection types are handled specially. The type 'custom' allows any types to be manually entered.`,
   minFunctions: `Minimum number of functions required. Default: ${DEFAULT_PLAN_CONFIG.minFunctions}`,
   minTestable: `Minimum number of testable functions required. Default: ${DEFAULT_PLAN_CONFIG.minTestable}`,
@@ -1328,6 +1356,9 @@ function toSparseConfig(config: PlanConfig): Record<string, unknown> {
   }
   if (config.showTestCodeFor !== DEFAULT_PLAN_CONFIG.showTestCodeFor) {
     result.showTestCodeFor = config.showTestCodeFor;
+  }
+  if (config.passcode !== DEFAULT_PLAN_CONFIG.passcode) {
+    result.passcode = config.passcode;
   }
   if (!equalModuleReadOnly(config.moduleReadOnly, DEFAULT_PLAN_CONFIG.moduleReadOnly)) {
     result.moduleReadOnly = config.moduleReadOnly;

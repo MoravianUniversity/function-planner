@@ -53,7 +53,12 @@ export function UnifiedPlanPage({ courseId }: { courseId: string }) {
       return <PlanPage courseId={courseId} planId={data.studentPlanId} />;
     case 'start-published':
       return (
-        <StartJoinPage courseId={courseId} basePlanId={data.basePlanId} initialTitle={data.title} />
+        <StartJoinPage
+          courseId={courseId}
+          basePlanId={data.basePlanId}
+          initialTitle={data.title}
+          passcodeRequired={data.passcodeRequired}
+        />
       );
     case 'staff-base':
       return <BasePlanManagePage courseId={courseId} basePlanId={data.basePlanId} />;

@@ -71,6 +71,7 @@ model BasePlan {
   content                 String   @default("")
   yjsState                Bytes?
   published               Boolean  @default(false)
+  studentsLocked          Boolean  @default(false)
   settings                Json?
   solutionContent         String   @default("")
   solutionYjsState        Bytes?

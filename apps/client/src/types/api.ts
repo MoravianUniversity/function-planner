@@ -47,6 +47,8 @@ export interface BasePlanDetail {
   title: string;
   content: string;
   published: boolean;
+  /** Instructor has locked every student plan for this assignment. */
+  studentsLocked?: boolean;
   settings: unknown | null;
   updatedAt: string;
   solutionContent: string;

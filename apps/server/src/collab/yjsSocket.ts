@@ -71,9 +71,9 @@ export function attachYjsWebSocket(httpServer: Server): void {
         try {
           const row = await prisma.studentPlan.findUnique({
             where: { id: parsed.studentPlanId },
-            select: { locked: true }
+            select: { locked: true, basePlan: { select: { studentsLocked: true } } }
           });
-          setDocLocked(docName, Boolean(row?.locked));
+          setDocLocked(docName, Boolean(row?.locked || row?.basePlan.studentsLocked));
         } catch {
           socket.write('HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n');
           socket.destroy();

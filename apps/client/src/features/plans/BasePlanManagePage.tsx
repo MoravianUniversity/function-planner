@@ -350,6 +350,23 @@ export function BasePlanManagePage({
     }
   });
 
+  const lockStudentsMutation = useMutation({
+    mutationFn: (locked: boolean) =>
+      apiSend<{ id: string; studentsLocked: boolean }>(
+        `/api/plans/base/${basePlanId}/lock-students?courseId=${courseId}`,
+        'PATCH',
+        { locked }
+      ),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['base-plan', courseId, basePlanId] });
+      void qc.invalidateQueries({ queryKey: ['student-plans', courseId, basePlanId] });
+      toast.success(result.studentsLocked ? 'All student plans locked.' : 'Student plans unlocked.');
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Could not change the lock.');
+    }
+  });
+
   const persistConfig = useCallback((overrides?: Partial<ConfigFormState>) => {
     saveConfigMutation.mutate(overrides);
   }, [saveConfigMutation]);
@@ -1054,6 +1071,23 @@ export function BasePlanManagePage({
 
       <section className="app-manage-plan-section">
         <h3>Student Plans</h3>
+        {canEditPlan ? (
+          <p>
+            <button
+              type="button"
+              className="app-btn"
+              disabled={lockStudentsMutation.isPending}
+              onClick={() => lockStudentsMutation.mutate(!basePlan.studentsLocked)}
+            >
+              {basePlan.studentsLocked ? '🔓 Unlock all student plans' : '🔒 Lock all student plans'}
+            </button>{' '}
+            {basePlan.studentsLocked ? (
+              <span className="app-muted">
+                Students cannot edit any plan for this assignment, including ones started later.
+              </span>
+            ) : null}
+          </p>
+        ) : null}
         {!basePlan.published ? (
           <p className="app-muted">Publish this plan before students can start submissions.</p>
         ) : null}

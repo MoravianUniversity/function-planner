@@ -83,6 +83,7 @@ function toStaffBasePlanDetail(plan: {
   title: string;
   content: string;
   published: boolean;
+  studentsLocked: boolean;
   settings: unknown;
   updatedAt: Date;
   solutionContent: string;
@@ -94,6 +95,7 @@ function toStaffBasePlanDetail(plan: {
     title: plan.title,
     content: plan.content,
     published: plan.published,
+    studentsLocked: plan.studentsLocked,
     settings: plan.settings,
     updatedAt: plan.updatedAt,
     solutionContent: plan.solutionContent,
@@ -541,7 +543,7 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
       where,
       include: {
         members: { include: { user: true } },
-        basePlan: { select: { title: true } }
+        basePlan: { select: { title: true, studentsLocked: true } }
       },
       orderBy: { updatedAt: 'desc' }
     });
@@ -555,7 +557,7 @@ router.get('/students', requireAuth, loadCourseContext, requireRole('TA', 'INSTR
           title: plan.basePlan.title,
           basePlanId: plan.basePlanId,
           active: activeSet.size > 0,
-          locked: plan.locked,
+          locked: plan.locked || plan.basePlan.studentsLocked,
           members: plan.members.map((m) => ({
             user: m.user,
             active: activeSet.has(m.userId)
@@ -585,7 +587,7 @@ router.get('/students/joinable', requireAuth, loadCourseContext, requireRole('ST
       where: { courseId, basePlanId },
       include: {
         members: { include: { user: true } },
-        basePlan: { select: { title: true } }
+        basePlan: { select: { title: true, studentsLocked: true } }
       },
       orderBy: { updatedAt: 'desc' }
     });
@@ -978,19 +980,59 @@ router.patch(
       const studentPlanId = String(req.params.studentPlanId);
       const { locked } = setStudentPlanLockSchema.parse(req.body);
 
-      const plan = await prisma.studentPlan.findFirst({ where: { id: studentPlanId, courseId } });
+      const plan = await prisma.studentPlan.findFirst({
+        where: { id: studentPlanId, courseId },
+        include: { basePlan: { select: { studentsLocked: true } } }
+      });
       if (!plan) {
         return res.status(404).json({ message: 'Student plan not found.' });
       }
 
       // Update the live socket state first so open connections are affected immediately.
-      setDocLocked(studentPlanDocName(courseId, studentPlanId), locked);
+      // A base-plan-wide lock keeps the plan locked regardless of this per-plan flag.
+      setDocLocked(studentPlanDocName(courseId, studentPlanId), locked || plan.basePlan.studentsLocked);
       await prisma.studentPlan.update({
         where: { id: studentPlanId },
         data: { locked },
         select: { id: true }
       });
       return res.json({ id: studentPlanId, locked });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.patch(
+  '/base/:basePlanId/lock-students',
+  requireAuth,
+  loadCourseContext,
+  requireRole('INSTRUCTOR'),
+  rejectReadonlyCourseWrites,
+  async (req, res, next) => {
+    try {
+      const { courseId } = res.locals.auth as { courseId: string };
+      const basePlanId = String(req.params.basePlanId);
+      const { locked } = setStudentPlanLockSchema.parse(req.body);
+
+      const basePlan = await prisma.basePlan.findFirst({ where: { courseId, id: basePlanId } });
+      if (!basePlan) {
+        return res.status(404).json({ message: 'Plan not found in this course.' });
+      }
+
+      const plans = await prisma.studentPlan.findMany({
+        where: { courseId, basePlanId },
+        select: { id: true, locked: true }
+      });
+      for (const p of plans) {
+        setDocLocked(studentPlanDocName(courseId, p.id), locked || p.locked);
+      }
+      await prisma.basePlan.update({
+        where: { courseId_id: { courseId, id: basePlanId } },
+        data: { studentsLocked: locked },
+        select: { id: true }
+      });
+      return res.json({ id: basePlanId, studentsLocked: locked });
     } catch (error) {
       next(error);
     }
@@ -1022,7 +1064,8 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
     const activeUserIds = getActiveStudentUserIds(docName);
     const activeSet = new Set(activeUserIds);
     // Members edit unless the plan is locked; instructors can always edit. TAs supervising without membership are read-only.
-    const canEdit = roles.includes('INSTRUCTOR') || (isMember && !plan.locked);
+    const locked = plan.locked || plan.basePlan.studentsLocked;
+    const canEdit = roles.includes('INSTRUCTOR') || (isMember && !locked);
 
     return res.json({
       id: plan.id,
@@ -1033,7 +1076,7 @@ router.get('/students/:studentPlanId', requireAuth, loadCourseContext, requireRo
       updatedAt: plan.updatedAt,
       currentUserId: user.id,
       isMember,
-      locked: plan.locked,
+      locked,
       canEdit,
       readonly: !canEdit,
       settings: redactPasscodeFromSettings(plan.basePlan.settings) ?? null,

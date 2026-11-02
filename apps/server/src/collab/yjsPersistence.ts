@@ -1,40 +1,9 @@
-import { createRequire } from 'node:module';
+import * as Y from 'yjs';
 import { parseYjsDocName } from '@function-planner/shared';
 import { prisma } from '../lib/prisma.js';
+import { docs, setPersistence } from './yjsServer.js';
 
-/**
- * Load the same CommonJS yjs instance that y-websocket/bin/utils uses.
- * Mixing ESM and CJS copies of yjs breaks Doc constructor checks / sync.
- */
-const require = createRequire(import.meta.url);
-const yWebsocketUtils = require('y-websocket/bin/utils') as {
-  setPersistence: (p: {
-    bindState: (docName: string, doc: YjsDoc) => void;
-    writeState: (docName: string, doc: YjsDoc) => Promise<unknown>;
-    provider: unknown;
-  } | null) => void;
-  docs: Map<string, YjsDoc & { destroy: () => void; name: string }>;
-};
-const Y = require('yjs') as {
-  Doc: new () => YjsDoc;
-  applyUpdate: (doc: YjsDoc, update: Uint8Array) => void;
-  encodeStateAsUpdate: (doc: YjsDoc) => Uint8Array;
-};
-
-type YMapLike = {
-  size: number;
-  toJSON: () => Record<string, unknown>;
-  entries: () => IterableIterator<[string, { toJSON: () => Record<string, unknown> }]>;
-  keys: () => IterableIterator<string>;
-};
-
-type YjsDoc = {
-  getMap: (name: string) => YMapLike;
-  transact: (fn: () => void) => void;
-  on: (event: 'update', handler: (...args: unknown[]) => void) => void;
-};
-
-const { setPersistence, docs } = yWebsocketUtils;
+type YjsDoc = Y.Doc;
 
 const DEBOUNCE_MS = 2000;
 const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
@@ -49,7 +18,7 @@ export function exportPlannerContent(doc: YjsDoc): string {
   const out: Record<string, unknown> = { ...modelData };
   delete out.functions;
   delete out.calls;
-  out.functions = Array.from(doc.getMap('functions').entries()).map(([key, ymap]) => {
+  out.functions = Array.from(doc.getMap<Y.Map<unknown>>('functions').entries()).map(([key, ymap]) => {
     const func = ymap.toJSON();
     func.key = key;
     return func;
@@ -187,7 +156,6 @@ function schedulePersist(docName: string, doc: YjsDoc): void {
 
 export function installYjsPersistence(): void {
   setPersistence({
-    provider: null,
     bindState: (docName, doc) => {
       void loadAndBind(docName, doc).catch((err) => {
         console.error('Failed to bind Yjs state', docName, err);

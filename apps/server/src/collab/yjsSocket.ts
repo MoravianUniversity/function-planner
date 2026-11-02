@@ -1,6 +1,6 @@
 import type { Server } from 'http';
 import type { WebSocket } from 'ws';
-import { createRequire } from 'node:module';
+
 import { WebSocketServer } from 'ws';
 import { parseYjsDocName } from '@function-planner/shared';
 import { verifyCollabTicket } from './ticket.js';
@@ -8,19 +8,7 @@ import { addStudentPlanPresence, removeStudentPlanPresence } from './presence.js
 import { installYjsPersistence } from './yjsPersistence.js';
 import { prisma } from '../lib/prisma.js';
 import { isDocChangingMessage, isDocLocked, setDocLocked } from './locks.js';
-
-/**
- * y-websocket@1.5.4 server utils (CommonJS) — uses yjs 13 + y-protocols, matching the
- * browser WebsocketProvider. Do not use @y/websocket-server (yjs 14 / @y/protocols).
- */
-const require = createRequire(import.meta.url);
-const { setupWSConnection } = require('y-websocket/bin/utils') as {
-  setupWSConnection: (
-    conn: WebSocket,
-    req: import('http').IncomingMessage,
-    opts?: { docName?: string; gc?: boolean }
-  ) => void;
-};
+import { setupWSConnection } from './yjsServer.js';
 
 const wss = new WebSocketServer({ noServer: true });
 

@@ -62,6 +62,12 @@ declare module 'function-planner-ui' {
     showCodeFor?: string;
     /** Regex of function names that show test code; empty = none. */
     showTestCodeFor?: string;
+    /** Allow optional (`T|None`) via advanced menu on params/returns. */
+    allowOptionalTypes?: boolean;
+    /** Allow union types in the type editor. */
+    allowUnionTypes?: boolean;
+    /** Allow param default values via advanced menu. */
+    allowParamDefaults?: boolean;
     /** true=all module fields, false=none, or list of field names. */
     moduleReadOnly?: boolean | string[];
     /** Per-function read-only rules: regex `for` + fields (true=all or field names). Matching rules merge. */

@@ -62,7 +62,8 @@ const PARAM_FACET_LABELS: Record<ParamFacet, string> = {
   structure: 'Cannot add, remove, or reorder',
   name: 'Names read-only',
   type: 'Types read-only',
-  desc: 'Descriptions read-only'
+  desc: 'Descriptions read-only',
+  default: 'Defaults read-only',
 };
 
 const RETURN_FACET_LABELS: Record<ReturnFacet, string> = {
@@ -149,6 +150,9 @@ export function BasePlanManagePage({
   const [showTestGlobalCode, setShowTestGlobalCode] = useState(DEFAULT_PLAN_CONFIG.showTestGlobalCode);
   const [showCodeFor, setShowCodeFor] = useState(DEFAULT_PLAN_CONFIG.showCodeFor);
   const [showTestCodeFor, setShowTestCodeFor] = useState(DEFAULT_PLAN_CONFIG.showTestCodeFor);
+  const [allowOptionalTypes, setAllowOptionalTypes] = useState(DEFAULT_PLAN_CONFIG.allowOptionalTypes);
+  const [allowUnionTypes, setAllowUnionTypes] = useState(DEFAULT_PLAN_CONFIG.allowUnionTypes);
+  const [allowParamDefaults, setAllowParamDefaults] = useState(DEFAULT_PLAN_CONFIG.allowParamDefaults);
   const [passcode, setPasscode] = useState(DEFAULT_PLAN_CONFIG.passcode);
   const [moduleReadOnlyMode, setModuleReadOnlyMode] = useState<ModuleReadOnlyMode>('none');
   const [moduleReadOnlyFields, setModuleReadOnlyFields] = useState<ModuleReadOnlyField[]>([]);
@@ -225,6 +229,9 @@ export function BasePlanManagePage({
     setShowTestGlobalCode(config.showTestGlobalCode);
     setShowCodeFor(config.showCodeFor);
     setShowTestCodeFor(config.showTestCodeFor);
+    setAllowOptionalTypes(config.allowOptionalTypes);
+    setAllowUnionTypes(config.allowUnionTypes);
+    setAllowParamDefaults(config.allowParamDefaults);
     setPasscode(config.passcode);
     const split = splitModuleReadOnly(config.moduleReadOnly);
     setModuleReadOnlyMode(split.mode);
@@ -274,6 +281,9 @@ export function BasePlanManagePage({
         showTestGlobalCode,
         showCodeFor,
         showTestCodeFor,
+        allowOptionalTypes,
+        allowUnionTypes,
+        allowParamDefaults,
         passcode,
         moduleReadOnlyMode,
         moduleReadOnlyFields,
@@ -311,6 +321,9 @@ export function BasePlanManagePage({
         showTestGlobalCode: s.showTestGlobalCode,
         showCodeFor: s.showCodeFor,
         showTestCodeFor: s.showTestCodeFor,
+        allowOptionalTypes: s.allowOptionalTypes,
+        allowUnionTypes: s.allowUnionTypes,
+        allowParamDefaults: s.allowParamDefaults,
         passcode: s.passcode.trim(),
         moduleReadOnly: storedModuleReadOnly(s.moduleReadOnlyMode, s.moduleReadOnlyFields),
         functionReadOnly: sanitizeFunctionReadOnly(s.functionReadOnly)
@@ -492,6 +505,9 @@ export function BasePlanManagePage({
             <p><strong>Show test global code:</strong> {showTestGlobalCode ? 'Yes' : 'No'}</p>
             <p><strong>Show function code for:</strong> {showCodeFor || '(none)'}</p>
             <p><strong>Show test code for:</strong> {showTestCodeFor || '(none)'}</p>
+            <p><strong>Allow optional types:</strong> {allowOptionalTypes ? 'Yes' : 'No'}</p>
+            <p><strong>Allow union types:</strong> {allowUnionTypes ? 'Yes' : 'No'}</p>
+            <p><strong>Allow param defaults:</strong> {allowParamDefaults ? 'Yes' : 'No'}</p>
             <p>
               <strong>Module readonly:</strong>{' '}
               {formatModuleReadOnly(storedModuleReadOnly(moduleReadOnlyMode, moduleReadOnlyFields))}
@@ -746,6 +762,47 @@ export function BasePlanManagePage({
                       }}
                     />
                     test global code
+                  </label>
+                </div>
+              </div>
+              <div className="app-config-form-full">
+                <span className="app-config-group-label">Advanced types</span>
+                <div className="app-config-checkbox-group">
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.allowOptionalTypes}>
+                    <input
+                      type="checkbox"
+                      checked={allowOptionalTypes}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setAllowOptionalTypes(checked);
+                        persistConfig({ allowOptionalTypes: checked });
+                      }}
+                    />
+                    optional types
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.allowUnionTypes}>
+                    <input
+                      type="checkbox"
+                      checked={allowUnionTypes}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setAllowUnionTypes(checked);
+                        persistConfig({ allowUnionTypes: checked });
+                      }}
+                    />
+                    union types
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.allowParamDefaults}>
+                    <input
+                      type="checkbox"
+                      checked={allowParamDefaults}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setAllowParamDefaults(checked);
+                        persistConfig({ allowParamDefaults: checked });
+                      }}
+                    />
+                    param defaults
                   </label>
                 </div>
               </div>
@@ -1268,6 +1325,9 @@ interface ConfigFormState {
   showTestGlobalCode: boolean;
   showCodeFor: string;
   showTestCodeFor: string;
+  allowOptionalTypes: boolean;
+  allowUnionTypes: boolean;
+  allowParamDefaults: boolean;
   passcode: string;
   moduleReadOnlyMode: ModuleReadOnlyMode;
   moduleReadOnlyFields: ModuleReadOnlyField[];
@@ -1297,6 +1357,9 @@ const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
   showTestGlobalCode: 'Show test global code',
   showCodeFor: 'Show function code for',
   showTestCodeFor: 'Show test code for',
+  allowOptionalTypes: 'Allow optional types',
+  allowUnionTypes: 'Allow union types',
+  allowParamDefaults: 'Allow param defaults',
   moduleReadOnly: 'Module readonly',
   functionReadOnly: 'Function readonly'
 };
@@ -1323,8 +1386,11 @@ const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   showTestGlobalCode: `If checked, students can see and edit test setup / global test code. Default: ${String(DEFAULT_PLAN_CONFIG.showTestGlobalCode)}`,
   showCodeFor: `Regex matched against function names to show the function code editor. Empty shows none; use .* for all. Prefer anchors for exact names, e.g. ^(main|helper)$ — without ^…$ a pattern like main also matches maintain. Default: (empty).`,
   showTestCodeFor: `Regex matched against function names to show the test code editor (also requires Testable). Empty shows none; use .* for all. Prefer anchors for exact names, e.g. ^(add|multiply)$ — without ^…$ a pattern like add also matches address. Default: (empty).`,
+  allowOptionalTypes: `If checked, params and returns can be marked optional (adds |None to the type) via an advanced menu on each row. Default: ${String(DEFAULT_PLAN_CONFIG.allowOptionalTypes)}`,
+  allowUnionTypes: `If checked, the type editor supports union types (A|B) with add/remove members. Default: ${String(DEFAULT_PLAN_CONFIG.allowUnionTypes)}`,
+  allowParamDefaults: `If checked, parameters can have a default value entered via an advanced menu on each param row. Default: ${String(DEFAULT_PLAN_CONFIG.allowParamDefaults)}`,
   moduleReadOnly: `Which module fields students cannot edit: all, none, or a custom subset (${moduleReadOnlyFieldValues.join(', ')}). Default: none.`,
-  functionReadOnly: `List of rules locking function fields for matching names on functions that came from the base plan (student-added functions are never locked by these rules). Each rule has a regex (prefer ^…$) and fields (all or a custom subset). Matching always locks the function name and prevents delete, in addition to the selected fields. For params/returns you can lock structure (no add/remove/reorder) and/or names/types/descriptions; optionally limit param locks with a param-name regex. Checking both callsInto and callsOutOf stores as calls. When multiple rules match, fields are unioned (all wins). Default: (none).`
+  functionReadOnly: `List of rules locking function fields for matching names on functions that came from the base plan (student-added functions are never locked by these rules). Each rule has a regex (prefer ^…$) and fields (all or a custom subset). Matching always locks the function name and prevents delete, in addition to the selected fields. For params/returns you can lock structure (no add/remove/reorder) and/or names/types/descriptions/defaults; optionally limit param locks with a param-name regex. Checking both callsInto and callsOutOf stores as calls. When multiple rules match, fields are unioned (all wins). Default: (none).`
 };
 
 function ConfigFieldTitle({fieldKey}: {fieldKey: ConfigFieldKey}) {
@@ -1390,6 +1456,15 @@ function toSparseConfig(config: PlanConfig): Record<string, unknown> {
   }
   if (config.showTestCodeFor !== DEFAULT_PLAN_CONFIG.showTestCodeFor) {
     result.showTestCodeFor = config.showTestCodeFor;
+  }
+  if (config.allowOptionalTypes !== DEFAULT_PLAN_CONFIG.allowOptionalTypes) {
+    result.allowOptionalTypes = config.allowOptionalTypes;
+  }
+  if (config.allowUnionTypes !== DEFAULT_PLAN_CONFIG.allowUnionTypes) {
+    result.allowUnionTypes = config.allowUnionTypes;
+  }
+  if (config.allowParamDefaults !== DEFAULT_PLAN_CONFIG.allowParamDefaults) {
+    result.allowParamDefaults = config.allowParamDefaults;
   }
   if (config.passcode !== DEFAULT_PLAN_CONFIG.passcode) {
     result.passcode = config.passcode;

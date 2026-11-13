@@ -279,6 +279,7 @@ export function useFunctionPlanner({
       allowOptionalTypes: cfg.allowOptionalTypes,
       allowUnionTypes: cfg.allowUnionTypes,
       allowParamDefaults: cfg.allowParamDefaults,
+      mainShouldNotHaveIO: cfg.mainShouldNotHaveIO,
       moduleReadOnly: cfg.moduleReadOnly,
       functionReadOnly: cfg.functionReadOnly,
       showLoadJSON: showLoadJSON ?? cfg.showLoadJSON,

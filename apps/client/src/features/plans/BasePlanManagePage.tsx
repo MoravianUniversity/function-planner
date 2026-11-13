@@ -153,6 +153,7 @@ export function BasePlanManagePage({
   const [allowOptionalTypes, setAllowOptionalTypes] = useState(DEFAULT_PLAN_CONFIG.allowOptionalTypes);
   const [allowUnionTypes, setAllowUnionTypes] = useState(DEFAULT_PLAN_CONFIG.allowUnionTypes);
   const [allowParamDefaults, setAllowParamDefaults] = useState(DEFAULT_PLAN_CONFIG.allowParamDefaults);
+  const [mainShouldNotHaveIO, setMainShouldNotHaveIO] = useState(DEFAULT_PLAN_CONFIG.mainShouldNotHaveIO);
   const [passcode, setPasscode] = useState(DEFAULT_PLAN_CONFIG.passcode);
   const [moduleReadOnlyMode, setModuleReadOnlyMode] = useState<ModuleReadOnlyMode>('none');
   const [moduleReadOnlyFields, setModuleReadOnlyFields] = useState<ModuleReadOnlyField[]>([]);
@@ -232,6 +233,7 @@ export function BasePlanManagePage({
     setAllowOptionalTypes(config.allowOptionalTypes);
     setAllowUnionTypes(config.allowUnionTypes);
     setAllowParamDefaults(config.allowParamDefaults);
+    setMainShouldNotHaveIO(config.mainShouldNotHaveIO);
     setPasscode(config.passcode);
     const split = splitModuleReadOnly(config.moduleReadOnly);
     setModuleReadOnlyMode(split.mode);
@@ -284,6 +286,7 @@ export function BasePlanManagePage({
         allowOptionalTypes,
         allowUnionTypes,
         allowParamDefaults,
+        mainShouldNotHaveIO,
         passcode,
         moduleReadOnlyMode,
         moduleReadOnlyFields,
@@ -324,6 +327,7 @@ export function BasePlanManagePage({
         allowOptionalTypes: s.allowOptionalTypes,
         allowUnionTypes: s.allowUnionTypes,
         allowParamDefaults: s.allowParamDefaults,
+        mainShouldNotHaveIO: s.mainShouldNotHaveIO,
         passcode: s.passcode.trim(),
         moduleReadOnly: storedModuleReadOnly(s.moduleReadOnlyMode, s.moduleReadOnlyFields),
         functionReadOnly: sanitizeFunctionReadOnly(s.functionReadOnly)
@@ -508,6 +512,7 @@ export function BasePlanManagePage({
             <p><strong>Allow optional types:</strong> {allowOptionalTypes ? 'Yes' : 'No'}</p>
             <p><strong>Allow union types:</strong> {allowUnionTypes ? 'Yes' : 'No'}</p>
             <p><strong>Allow param defaults:</strong> {allowParamDefaults ? 'Yes' : 'No'}</p>
+            <p><strong>Main should not have I/O:</strong> {mainShouldNotHaveIO ? 'Yes' : 'No'}</p>
             <p>
               <strong>Module readonly:</strong>{' '}
               {formatModuleReadOnly(storedModuleReadOnly(moduleReadOnlyMode, moduleReadOnlyFields))}
@@ -668,6 +673,18 @@ export function BasePlanManagePage({
                       }}
                     />
                     can be claimed
+                  </label>
+                  <label className="app-checkbox-inline" title={CONFIG_FIELD_HELP.mainShouldNotHaveIO}>
+                    <input
+                      type="checkbox"
+                      checked={mainShouldNotHaveIO}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setMainShouldNotHaveIO(checked);
+                        persistConfig({ mainShouldNotHaveIO: checked });
+                      }}
+                    />
+                    Main should not have I/O
                   </label>
                 </div>
               </div>
@@ -1328,6 +1345,7 @@ interface ConfigFormState {
   allowOptionalTypes: boolean;
   allowUnionTypes: boolean;
   allowParamDefaults: boolean;
+  mainShouldNotHaveIO: boolean;
   passcode: string;
   moduleReadOnlyMode: ModuleReadOnlyMode;
   moduleReadOnlyFields: ModuleReadOnlyField[];
@@ -1360,6 +1378,7 @@ const CONFIG_FIELD_LABELS: Record<ConfigFieldKey, string> = {
   allowOptionalTypes: 'Allow optional types',
   allowUnionTypes: 'Allow union types',
   allowParamDefaults: 'Allow param defaults',
+  mainShouldNotHaveIO: 'Main should not have I/O',
   moduleReadOnly: 'Module readonly',
   functionReadOnly: 'Function readonly'
 };
@@ -1389,6 +1408,7 @@ const CONFIG_FIELD_HELP: Record<ConfigFieldKey, string> = {
   allowOptionalTypes: `If checked, params and returns can be marked optional (adds |None to the type) via an advanced menu on each row. Default: ${String(DEFAULT_PLAN_CONFIG.allowOptionalTypes)}`,
   allowUnionTypes: `If checked, the type editor supports union types (A|B) with add/remove members. Default: ${String(DEFAULT_PLAN_CONFIG.allowUnionTypes)}`,
   allowParamDefaults: `If checked, parameters can have a default value entered via an advanced menu on each param row. Default: ${String(DEFAULT_PLAN_CONFIG.allowParamDefaults)}`,
+  mainShouldNotHaveIO: `If checked, warns when main is marked with direct user I/O (anything other than none or indirect). Default: ${String(DEFAULT_PLAN_CONFIG.mainShouldNotHaveIO)}`,
   moduleReadOnly: `Which module fields students cannot edit: all, none, or a custom subset (${moduleReadOnlyFieldValues.join(', ')}). Default: none.`,
   functionReadOnly: `List of rules locking function fields for matching names on functions that came from the base plan (student-added functions are never locked by these rules). Each rule has a regex (prefer ^…$) and fields (all or a custom subset). Matching always locks the function name and prevents delete, in addition to the selected fields. For params/returns you can lock structure (no add/remove/reorder) and/or names/types/descriptions/defaults; optionally limit param locks with a param-name regex. Checking both callsInto and callsOutOf stores as calls. When multiple rules match, fields are unioned (all wins). Default: (none).`
 };
@@ -1465,6 +1485,9 @@ function toSparseConfig(config: PlanConfig): Record<string, unknown> {
   }
   if (config.allowParamDefaults !== DEFAULT_PLAN_CONFIG.allowParamDefaults) {
     result.allowParamDefaults = config.allowParamDefaults;
+  }
+  if (config.mainShouldNotHaveIO !== DEFAULT_PLAN_CONFIG.mainShouldNotHaveIO) {
+    result.mainShouldNotHaveIO = config.mainShouldNotHaveIO;
   }
   if (config.passcode !== DEFAULT_PLAN_CONFIG.passcode) {
     result.passcode = config.passcode;

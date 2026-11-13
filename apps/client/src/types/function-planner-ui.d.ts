@@ -68,6 +68,8 @@ declare module 'function-planner-ui' {
     allowUnionTypes?: boolean;
     /** Allow param default values via advanced menu. */
     allowParamDefaults?: boolean;
+    /** Warn if main has direct I/O (not none/indirect). Default: true. */
+    mainShouldNotHaveIO?: boolean;
     /** true=all module fields, false=none, or list of field names. */
     moduleReadOnly?: boolean | string[];
     /** Per-function read-only rules: regex `for` + fields (true=all or field names). Matching rules merge. */
